@@ -12,6 +12,14 @@ STATUS_EXPIRED = "expired"
 STATUS_CLAIMED = "claimed"
 STATUS_NONE = "none"
 
+VOUCHER_STATUS_READY = "READY_TO_USE"
+VOUCHER_STATUS_PENDING = "PENDING"
+VOUCHER_STATUS_EXPIRED = "EXPIRED"
+VOUCHER_STATUS_BURNED = "BURNED"
+EXPIRING_VOUCHER_STATUSES = frozenset({VOUCHER_STATUS_READY, VOUCHER_STATUS_PENDING})
+
+_LOCALIZED_KEYS = ("pl", "en", "sk")
+
 RECEIPT_SOURCE_E_RECEIPT = "e_receipt"
 RECEIPT_SOURCE_DETAILS = "details"
 
@@ -143,6 +151,18 @@ def _slim_line(line: Any) -> dict[str, Any] | None:
     return slim or None
 
 
+def localized_text(value: Any) -> str | None:
+    """Pick Polish, then English, then Slovak from an app translation object."""
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, dict):
+        for key in _LOCALIZED_KEYS:
+            text = value.get(key)
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+    return None
+
+
 def slim_receipt_lines(payload: Any) -> list[dict[str, Any]]:
     """Keep only the fiscal line types and fields exposed on the receipts sensor."""
     slimmed: list[dict[str, Any]] = []
@@ -227,6 +247,75 @@ class ShakeomatReward:
         )
 
 
+def _badge_labels(badges: Any) -> list[str]:
+    if not isinstance(badges, list):
+        return []
+    labels: list[str] = []
+    for badge in badges:
+        if not isinstance(badge, dict):
+            continue
+        label = badge.get("label")
+        if isinstance(label, str) and label.strip():
+            labels.append(label.strip())
+    return labels
+
+
+@dataclass
+class Voucher:
+    """A coupon from promos/coupons/, shown in the app as a voucher."""
+
+    kind: str | None = None
+    number: str | None = None
+    status: str | None = None
+    valid_from: str | None = None
+    valid_to: str | None = None
+    discount: str | None = None
+    conditions: str | None = None
+    burned_date: str | None = None
+    burned_location: str | None = None
+    badges: list[str] = field(default_factory=list)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "number": self.number,
+            "status": self.status,
+            "valid_from": self.valid_from,
+            "valid_to": self.valid_to,
+            "discount": self.discount,
+            "conditions": self.conditions,
+            "burned_date": self.burned_date,
+            "burned_location": self.burned_location,
+            "badges": self.badges,
+        }
+
+    @classmethod
+    def from_payload(cls, item: dict[str, Any]) -> Voucher:
+        kind = item.get("meta")
+        number = item.get("number")
+        status = item.get("status")
+        valid_from = item.get("valid_from")
+        valid_to = item.get("valid_to")
+        burned_date = item.get("burned_date")
+        burned_location = item.get("burned_location")
+        return cls(
+            kind=kind.strip() if isinstance(kind, str) and kind.strip() else None,
+            number=number.strip() if isinstance(number, str) and number.strip() else None,
+            status=status.strip() if isinstance(status, str) and status.strip() else None,
+            valid_from=valid_from if isinstance(valid_from, str) else None,
+            valid_to=valid_to if isinstance(valid_to, str) else None,
+            discount=localized_text(item.get("discount_description")),
+            conditions=localized_text(item.get("usage_conditions")),
+            burned_date=burned_date if isinstance(burned_date, str) else None,
+            burned_location=(
+                burned_location.strip()
+                if isinstance(burned_location, str) and burned_location.strip()
+                else None
+            ),
+            badges=_badge_labels(item.get("badges")),
+        )
+
+
 @dataclass
 class Receipt:
     """A receipt fetched on coordinator refresh, with a slim fiscal line list."""
@@ -260,6 +349,7 @@ class BiedronkaData:
     last_details: dict[str, Any] | None = None
     today_total: float = 0.0
     receipts: list[Receipt] = field(default_factory=list)
+    vouchers: list[Voucher] = field(default_factory=list)
     shakeomats: list[ShakeomatOffer] = field(default_factory=list)
     current_shakeomat: ShakeomatOffer | None = None
     available_shakeomats: list[ShakeomatOffer] = field(default_factory=list)

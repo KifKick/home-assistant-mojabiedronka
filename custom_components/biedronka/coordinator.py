@@ -27,6 +27,7 @@ from .const import (
 )
 from .exceptions import BiedronkaAuthError, BiedronkaCannotConnect, BiedronkaError
 from .models import (
+    EXPIRING_VOUCHER_STATUSES,
     RECEIPT_SOURCE_DETAILS,
     RECEIPT_SOURCE_E_RECEIPT,
     STATUS_AVAILABLE,
@@ -37,6 +38,7 @@ from .models import (
     Receipt,
     ShakeomatOffer,
     ShakeomatReward,
+    Voucher,
     slim_receipt_lines,
 )
 
@@ -66,6 +68,20 @@ def _as_sections(dashboard: Any) -> list[dict[str, Any]]:
         sections = dashboard.get("sections") or []
         return [item for item in sections if isinstance(item, dict)]
     return []
+
+
+def nearest_expiring_voucher(vouchers: list[Voucher], now: datetime) -> Voucher | None:
+    """Earliest still-valid ready or pending voucher."""
+    chosen: tuple[datetime, Voucher] | None = None
+    for voucher in vouchers:
+        if voucher.status not in EXPIRING_VOUCHER_STATUSES:
+            continue
+        end = _parse_dt(voucher.valid_to)
+        if end is None or end <= now:
+            continue
+        if chosen is None or end < chosen[0]:
+            chosen = (end, voucher)
+    return chosen[1] if chosen else None
 
 
 def _text(payload: dict[str, Any], *keys: str) -> str | None:
@@ -140,6 +156,7 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
         )
 
         today_total = await self._today_total(transactions, tx_page if isinstance(tx_page, dict) else {})
+        vouchers = await self._load_vouchers()
         shakeomats = await self._load_shakeomats()
 
         if self.auto_shakeomat:
@@ -154,6 +171,7 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
             last_details=details,
             today_total=today_total,
             receipts=receipts,
+            vouchers=vouchers,
         )
         self._apply_shakeomats(data, shakeomats)
         return data
@@ -203,6 +221,21 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
         data.current_shakeomat = current
         data.reward_history = history
         data.last_reward = history[0] if history else None
+
+    async def _load_vouchers(self) -> list[Voucher]:
+        """Coupons from the offers tab. A failure here leaves the rest of the refresh intact."""
+        try:
+            payload = await self.api.coupons()
+        except BiedronkaError as err:
+            _LOGGER.debug("Coupons failed: %s", err)
+            return []
+        coupons = payload.get("coupons") if isinstance(payload, dict) else None
+        if not isinstance(coupons, list):
+            return []
+        vouchers = [
+            Voucher.from_payload(item) for item in coupons if isinstance(item, dict)
+        ]
+        return sorted(vouchers, key=lambda voucher: _parse_dt(voucher.valid_to) or EPOCH)
 
     async def _load_shakeomats(self) -> list[ShakeomatOffer]:
         """Collect every Shakeomat card the dashboard exposes, however many there are."""
@@ -323,16 +356,26 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
 
     async def _fetch_receipt(self, tx: dict[str, Any]) -> Receipt | None:
         tx_id = str(tx["id"])
-        try:
-            if tx.get("is_e_receipt_available"):
+        payload: Any = None
+        source = RECEIPT_SOURCE_DETAILS
+        if tx.get("is_e_receipt_available"):
+            try:
                 payload = await self.api.e_receipt(tx_id)
                 source = RECEIPT_SOURCE_E_RECEIPT
-            else:
+            except BiedronkaError as err:
+                _LOGGER.debug(
+                    "E-receipt %s unavailable (%s), falling back to transaction details",
+                    tx_id,
+                    err,
+                )
+                payload = None
+        if payload is None:
+            try:
                 payload = await self.api.transaction_details(tx_id)
                 source = RECEIPT_SOURCE_DETAILS
-        except BiedronkaError as err:
-            _LOGGER.debug("Receipt %s failed: %s", tx_id, err)
-            return None
+            except BiedronkaError as err:
+                _LOGGER.debug("Receipt %s failed: %s", tx_id, err)
+                return None
         if payload is None:
             return None
         details = payload if isinstance(payload, dict) else {}

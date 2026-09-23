@@ -1,7 +1,8 @@
-"""Sensors: card, last transaction, today spend, Shakeomat status."""
+"""Sensors: card, last transaction, today spend, vouchers, Shakeomat status."""
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -13,9 +14,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BiedronkaConfigEntry
-from .coordinator import BiedronkaCoordinator
+from .coordinator import (
+    WARSAW,
+    BiedronkaCoordinator,
+    _parse_dt,
+    nearest_expiring_voucher,
+)
 from .entity import BiedronkaEntity
-from .models import STATUS_COOLDOWN, STATUS_NONE
+from .models import STATUS_COOLDOWN, STATUS_NONE, VOUCHER_STATUS_READY
 
 PARALLEL_UPDATES = 0
 
@@ -32,6 +38,8 @@ async def async_setup_entry(
             BiedronkaLastTransactionSensor(coordinator),
             BiedronkaTodaySpendSensor(coordinator),
             BiedronkaReceiptsSensor(coordinator),
+            BiedronkaVouchersSensor(coordinator),
+            BiedronkaVoucherExpirySensor(coordinator),
             BiedronkaShakeomatSensor(coordinator),
             BiedronkaShakeomatAvailableSensor(coordinator),
             BiedronkaLastShakeomatSensor(coordinator),
@@ -147,6 +155,66 @@ class BiedronkaReceiptsSensor(BiedronkaEntity, SensorEntity):
         if not data:
             return {}
         return {"receipts": [receipt.as_dict() for receipt in data.receipts]}
+
+
+class BiedronkaVouchersSensor(BiedronkaEntity, SensorEntity):
+    """How many vouchers are ready to use, with every coupon listed in the attributes."""
+
+    _attr_translation_key = "vouchers"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _unrecorded_attributes = frozenset({"vouchers"})
+
+    def __init__(self, coordinator: BiedronkaCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{self._card}_vouchers"
+
+    @property
+    def native_value(self) -> int:
+        vouchers = self.coordinator.data.vouchers if self.coordinator.data else []
+        return sum(1 for voucher in vouchers if voucher.status == VOUCHER_STATUS_READY)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data
+        if not data:
+            return {}
+        return {"vouchers": [voucher.as_dict() for voucher in data.vouchers]}
+
+
+class BiedronkaVoucherExpirySensor(BiedronkaEntity, SensorEntity):
+    """Soonest valid_to among ready and pending vouchers that have not expired yet."""
+
+    _attr_translation_key = "voucher_expiry"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, coordinator: BiedronkaCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{self._card}_voucher_expiry"
+
+    def _nearest(self):
+        data = self.coordinator.data
+        if not data:
+            return None
+        return nearest_expiring_voucher(data.vouchers, datetime.now(WARSAW))
+
+    @property
+    def native_value(self) -> datetime | None:
+        voucher = self._nearest()
+        if not voucher:
+            return None
+        return _parse_dt(voucher.valid_to)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        voucher = self._nearest()
+        if not voucher:
+            return {}
+        return {
+            "number": voucher.number,
+            "discount": voucher.discount,
+            "conditions": voucher.conditions,
+            "status": voucher.status,
+        }
 
 
 class BiedronkaShakeomatSensor(BiedronkaEntity, SensorEntity):

@@ -57,6 +57,12 @@
       "receipts": {
         "name": "Ostatnie paragony"
       },
+      "vouchers": {
+        "name": "Vouchery"
+      },
+      "voucher_expiry": {
+        "name": "Najbliższe wygaśnięcie vouchera"
+      },
       "shakeomat": {
         "name": "Shakeomat"
       },

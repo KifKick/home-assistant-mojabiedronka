@@ -57,6 +57,12 @@
       "receipts": {
         "name": "Recent receipts"
       },
+      "vouchers": {
+        "name": "Vouchers"
+      },
+      "voucher_expiry": {
+        "name": "Nearest voucher expiry"
+      },
       "shakeomat": {
         "name": "Shakeomat"
       },

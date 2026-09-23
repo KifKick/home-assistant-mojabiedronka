@@ -5,6 +5,8 @@
       "last_transaction": { "default": "mdi:receipt-text-outline" },
       "today_spend": { "default": "mdi:cash" },
       "receipts": { "default": "mdi:receipt-text" },
+      "vouchers": { "default": "mdi:ticket-percent-outline" },
+      "voucher_expiry": { "default": "mdi:calendar-clock" },
       "shakeomat": { "default": "mdi:gift-outline" },
       "shakeomat_available": { "default": "mdi:gift-open-outline" },
       "shakeomat_last_offer": { "default": "mdi:gift" }

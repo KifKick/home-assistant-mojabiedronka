@@ -58,6 +58,8 @@ The official app **never shows** `refresh_token` in settings — that is expecte
 | `sensor.biedronka_*_karta` / Loyalty card | Card number |
 | Last transaction | Amount in PLN, store, receipt, line items (EAN) |
 | Recent receipts | Up to 5 recent receipts in the `receipts` attribute (id, date, store, number, total, source, and slim fiscal lines). Fetched on startup and on refresh |
+| Vouchers | How many vouchers are ready to use. The `vouchers` attribute lists every coupon from `GET promos/coupons/` (kind, number, status, valid_from, valid_to, discount, conditions, badges) |
+| Nearest voucher expiry | Earliest `valid_to` among ready and pending vouchers that have not expired yet; that voucher's code and description are in the attributes |
 | Today's spend | Sum from today's receipts |
 | Shakeomat | Nearest offer: `available` / `cooldown` / `expired` / `claimed` / `none`; full list in the `offers` attribute |
 | Shakeomats ready | How many offers can be claimed right now |
@@ -135,6 +137,8 @@ Oficjalna apka **nigdy nie pokazuje** `refresh_token` w ustawieniach — to norm
 | `sensor.biedronka_*_karta` / Loyalty card | Numer karty |
 | Ostatnia transakcja | Kwota PLN, sklep, paragon, pozycje (EAN) |
 | Ostatnie paragony | Do 5 ostatnich paragonów w atrybucie `receipts` (id, data, sklep, numer, suma, źródło i okrojone linie fiskalne). Pobierane przy starcie i przy odświeżeniu |
+| Vouchery | Ile voucherów można użyć teraz. Atrybut `vouchers` zawiera wszystkie kupony z `GET promos/coupons/` (rodzaj, numer, status, valid_from, valid_to, rabat, warunki, odznaki) |
+| Najbliższe wygaśnięcie vouchera | Najwcześniejsze `valid_to` wśród gotowych i oczekujących voucherów, które jeszcze nie wygasły; kod i opis tego vouchera są w atrybutach |
 | Dzisiejsze wydatki | Suma z dzisiejszych paragonów |
 | Shakeomat | Najbliższa oferta: `available` / `cooldown` / `expired` / `claimed` / `none`, pełna lista w atrybucie `offers` |
 | Shakeomaty do odebrania | Ile ofert można odebrać w tej chwili |

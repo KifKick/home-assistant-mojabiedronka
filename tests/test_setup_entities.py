@@ -25,6 +25,9 @@ class FullFakeApi(FakeApi):
     async def e_receipt(self, transaction_id: str, output_format: str = "json"):
         return {}
 
+    async def coupons(self):
+        return {"meta": {"kinds": []}, "coupons": []}
+
 
 @pytest.fixture
 def entry(hass):
@@ -58,6 +61,8 @@ async def test_entities_are_created(hass, entry, enable_custom_integrations):
     assert hass.states.get("sensor.moja_biedronka_shakeomat").state == "available"
     assert hass.states.get("sensor.moja_biedronka_shakeomats_ready").state == "2"
     assert hass.states.get("sensor.moja_biedronka_recent_receipts").state == "0"
+    assert hass.states.get("sensor.moja_biedronka_vouchers").state == "0"
+    assert hass.states.get("sensor.moja_biedronka_nearest_voucher_expiry").state == "unknown"
     assert hass.states.get("button.moja_biedronka_reveal_shakeomats") is not None
     assert hass.states.get("sensor.moja_biedronka_shakeomat_1") is None
 

@@ -154,15 +154,31 @@ async def test_details_are_used_when_e_receipt_is_unavailable(coordinator_factor
     assert api.details_calls == ["paper"]
 
 
+async def test_e_receipt_404_falls_back_to_transaction_details(coordinator_factory):
+    api = ReceiptFakeApi([_tx("missing")])
+    api.fail_e_receipt = {"missing"}
+    coordinator = coordinator_factory(api)
+
+    receipts = await coordinator._sync_receipts(api.transactions_page["transactions"])
+
+    assert receipts[0].source == RECEIPT_SOURCE_DETAILS
+    assert receipts[0].as_dict()["lines"] == [{"sellLine": {"name": "Chleb"}}]
+    assert receipts[0].payload["items"] == [{"name": "Chleb", "ean": "123"}]
+    assert api.e_receipt_calls == ["missing"]
+    assert api.details_calls == ["missing"]
+
+
 async def test_one_failed_receipt_does_not_drop_the_rest(coordinator_factory):
     api = ReceiptFakeApi([_tx("ok"), _tx("bad"), _tx("also")])
     api.fail_e_receipt = {"bad"}
+    api.fail_details = {"bad"}
     coordinator = coordinator_factory(api)
 
     receipts = await coordinator._sync_receipts(api.transactions_page["transactions"])
 
     assert [receipt.id for receipt in receipts] == ["ok", "also"]
     assert api.e_receipt_calls == ["ok", "bad", "also"]
+    assert api.details_calls == ["bad"]
 
 
 FAT_E_RECEIPT = {
