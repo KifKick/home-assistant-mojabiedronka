@@ -69,7 +69,7 @@ The official app **never shows** `refresh_token` in settings — that is expecte
 
 There are no separate “Shakeomat 1” and “Shakeomat 2” entities. The API can return further offers under the same `SHAKEOMAT` type, and besides the two daily ones there are sometimes extras (including `SHAKEOMARKA`), so the number of offers varies and the integration handles any count. Old slot-based entities are removed from the registry on startup.
 
-Claimed offers are stored in integration storage and survive Home Assistant restarts — a new offer does not wipe the previous one. After each activation a separate `persistent_notification` appears with the offer name.
+Claimed offers are stored in integration storage and survive Home Assistant restarts — a new offer does not wipe the previous one. Activation only updates the Shakeomat entities (last offer and history). It does not create a Home Assistant notification.
 
 Refresh interval: every 15 minutes (integration options: 5–120 min).
 
@@ -148,7 +148,7 @@ Oficjalna apka **nigdy nie pokazuje** `refresh_token` w ustawieniach — to norm
 
 Nie ma osobnych encji „Shakeomat 1” i „Shakeomat 2”. API potrafi podać kolejne oferty pod tym samym typem `SHAKEOMAT`, a poza dwiema dobowymi bywają dodatkowe (również `SHAKEOMARKA`), więc liczba ofert jest zmienna i integracja obsługuje ich dowolnie wiele. Stare encje ze slotami są usuwane z rejestru przy starcie.
 
-Odebrane oferty trafiają do magazynu integracji i przeżywają restart Home Assistanta — nowa oferta nie kasuje poprzedniej. Po każdej aktywacji pojawia się osobny `persistent_notification` z nazwą oferty.
+Odebrane oferty trafiają do magazynu integracji i przeżywają restart Home Assistanta — nowa oferta nie kasuje poprzedniej. Aktywacja zmienia tylko encje Shakeomatu (ostatnia oferta i historia). Nie tworzy powiadomienia Home Assistanta.
 
 Odświeżanie: co 15 minut (opcje integracji: 5–120 min).
 

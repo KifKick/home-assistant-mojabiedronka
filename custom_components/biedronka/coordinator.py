@@ -450,20 +450,7 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
         self._rewards[offer_id] = reward
         self._prune_rewards()
         await self._save_rewards()
-        self._notify(reward)
         if refresh:
             await self.async_request_refresh()
         return reward.as_dict()
 
-    def _notify(self, reward: ShakeomatReward) -> None:
-        from homeassistant.components import persistent_notification
-
-        title = reward.name or "Shakeomat"
-        extra = [value for value in (reward.price, reward.discount) if value]
-        message = title if not extra else f"{title} ({', '.join(extra)})"
-        persistent_notification.async_create(
-            self.hass,
-            message,
-            title="Biedronka Shakeomat",
-            notification_id=f"biedronka_shakeomat_{reward.offer_id}",
-        )
