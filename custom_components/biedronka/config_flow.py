@@ -27,6 +27,7 @@ from .auth import KeycloakLogin, auth_code_from_redirect
 from .const import (
     COMPANION_WAIT,
     CONF_ACCESS_TOKEN,
+    CONF_APP_VERSION,
     CONF_AUTO_SHAKEOMAT,
     CONF_CARD_NUMBER,
     CONF_PHONE,
@@ -143,8 +144,12 @@ class BiedronkaConfigFlow(CompanionLoginFlow, ConfigFlow, domain=DOMAIN):
 
     async def _async_finish(self, tokens: dict[str, str]) -> ConfigFlowResult:
         session = async_get_clientsession(self.hass)
+        known = self._existing_entry.data if self._existing_entry else {}
         api = BiedronkaApi(
-            session, tokens[CONF_ACCESS_TOKEN], tokens[CONF_REFRESH_TOKEN]
+            session,
+            tokens[CONF_ACCESS_TOKEN],
+            tokens[CONF_REFRESH_TOKEN],
+            app_version=known.get(CONF_APP_VERSION),
         )
         try:
             user = await api.users_me()
@@ -166,6 +171,7 @@ class BiedronkaConfigFlow(CompanionLoginFlow, ConfigFlow, domain=DOMAIN):
                     CONF_REFRESH_TOKEN: api.refresh_token,
                     CONF_PHONE: phone,
                     CONF_CARD_NUMBER: card,
+                    CONF_APP_VERSION: api.app_version,
                 },
             )
         self._abort_if_unique_id_configured()
@@ -177,6 +183,7 @@ class BiedronkaConfigFlow(CompanionLoginFlow, ConfigFlow, domain=DOMAIN):
                 CONF_REFRESH_TOKEN: api.refresh_token,
                 CONF_PHONE: phone,
                 CONF_CARD_NUMBER: card,
+                CONF_APP_VERSION: api.app_version,
             },
             options={
                 CONF_AUTO_SHAKEOMAT: DEFAULT_AUTO_SHAKEOMAT,

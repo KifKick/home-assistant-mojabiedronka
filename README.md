@@ -109,6 +109,8 @@ Locally without a container: `scripts/setup` then `scripts/develop`. The `config
 - `User-Agent: Android/2.24.0`
 - Token: `https://konto.biedronka.pl/realms/loyalty/protocol/openid-connect/token`
 
+When Biedronka stops accepting an app version, the API answers **HTTP 426** with the minimum one in the `min-supported-version-android` header. The integration then switches its `User-Agent` to that version, remembers it for the entry and retries — no update or restart needed. A warning in the log tells you it happened.
+
 ### Support
 
 If this integration helps you, you can buy a coffee: [Buy Me a Coffee](https://buymeacoffee.com/przemko92)
@@ -203,6 +205,8 @@ Lokalnie bez kontenera: `scripts/setup` potem `scripts/develop`. Katalog `config
 - `https://api.prod.biedronka.cloud/api/v7/`
 - `User-Agent: Android/2.24.0`
 - Token: `https://konto.biedronka.pl/realms/loyalty/protocol/openid-connect/token`
+
+Gdy Biedronka przestaje akceptować wersję aplikacji, API odpowiada **HTTP 426** z minimalną wersją w nagłówku `min-supported-version-android`. Integracja przełącza wtedy `User-Agent` na tę wersję, zapamiętuje ją dla wpisu i ponawia zapytanie — bez aktualizacji ani restartu. Informuje o tym ostrzeżenie w logu.
 
 ### Wsparcie
 

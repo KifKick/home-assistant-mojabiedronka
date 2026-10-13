@@ -16,7 +16,10 @@ COMPANION_WAIT: Final = {
     "location_prefixes": [REDIRECT_URI],
 }
 
-API_USER_AGENT: Final = "Android/2.24.0"
+# Minimum app version known to work; the API reports a newer one with HTTP 426
+# and the integration then switches to it on its own (see BiedronkaApi).
+API_APP_VERSION: Final = "2.24.0"
+API_USER_AGENT: Final = f"Android/{API_APP_VERSION}"
 KEYCLOAK_USER_AGENT: Final = (
     "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
@@ -30,6 +33,7 @@ CONF_SCAN_INTERVAL: Final = "scan_interval"
 CONF_AUTO_SHAKEOMAT: Final = "auto_shakeomat"
 CONF_CARD_NUMBER: Final = "card_number"
 CONF_REDIRECT_URL: Final = "redirect_url"
+CONF_APP_VERSION: Final = "app_version"
 
 DEFAULT_SCAN_INTERVAL = timedelta(minutes=15)
 DEFAULT_AUTO_SHAKEOMAT: Final = False
