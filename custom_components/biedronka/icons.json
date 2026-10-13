@@ -42,6 +42,12 @@
       },
       "loyalty_balance": {
         "default": "mdi:sticker-check-outline"
+      },
+      "store_hours": {
+        "default": "mdi:store-clock-outline"
+      },
+      "messages": {
+        "default": "mdi:email-outline"
       }
     },
     "event": {
@@ -59,6 +65,15 @@
       },
       "new_loyalty_offer": {
         "default": "mdi:sticker-plus-outline"
+      },
+      "new_message_offer": {
+        "default": "mdi:email-alert-outline"
+      },
+      "new_stickers_offer": {
+        "default": "mdi:sticker-plus"
+      },
+      "new_loyalty_reward_offer": {
+        "default": "mdi:gift-open-outline"
       }
     },
     "button": {
@@ -70,6 +85,25 @@
       "auto_shakeomat": {
         "default": "mdi:auto-fix"
       }
+    },
+    "binary_sensor": {
+      "store_open": {
+        "default": "mdi:store-off-outline",
+        "state": {
+          "on": "mdi:store-check-outline"
+        }
+      }
+    }
+  },
+  "services": {
+    "product_info": {
+      "service": "mdi:barcode-scan"
+    },
+    "product_stock_nearby": {
+      "service": "mdi:store-search-outline"
+    },
+    "product_search": {
+      "service": "mdi:magnify"
     }
   }
 }

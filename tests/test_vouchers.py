@@ -68,6 +68,9 @@ class VoucherFakeApi:
     async def wallets(self):
         return []
 
+    async def notifications(self):
+        return {"notifications": []}
+
 
 @pytest.fixture
 def coordinator_factory(hass):

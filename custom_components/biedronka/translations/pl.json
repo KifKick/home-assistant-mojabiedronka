@@ -98,6 +98,12 @@
       },
       "loyalty_balance": {
         "name": "Saldo akcji lojalnościowej"
+      },
+      "store_hours": {
+        "name": "Godziny otwarcia sklepu"
+      },
+      "messages": {
+        "name": "Wiadomości"
       }
     },
     "button": {
@@ -160,7 +166,109 @@
             }
           }
         }
+      },
+      "new_message_offer": {
+        "name": "Nowa wiadomość",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "Nowa oferta"
+            }
+          }
+        }
+      },
+      "new_stickers_offer": {
+        "name": "Zmiana naklejek",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "Nowa oferta"
+            }
+          }
+        }
+      },
+      "new_loyalty_reward_offer": {
+        "name": "Nagroda do odebrania",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "Nowa oferta"
+            }
+          }
+        }
       }
+    },
+    "binary_sensor": {
+      "store_open": {
+        "name": "Sklep otwarty",
+        "state": {
+          "on": "Otwarty",
+          "off": "Zamknięty"
+        }
+      }
+    }
+  },
+  "services": {
+    "product_info": {
+      "name": "Cena i dostępność produktu",
+      "description": "Cena i dostępność produktu (po kodzie kreskowym) w sklepie wybranym w aplikacji.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Konto Biedronki; gdy puste — pierwsze."
+        },
+        "ean": {
+          "name": "Kod kreskowy (EAN)",
+          "description": "Kod kreskowy z opakowania."
+        }
+      }
+    },
+    "product_stock_nearby": {
+      "name": "Dostępność produktu w okolicy",
+      "description": "Sklepy w pobliżu, w których produkt jest dostępny.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Konto Biedronki; gdy puste — pierwsze."
+        },
+        "ean": {
+          "name": "Kod kreskowy (EAN)",
+          "description": "Kod kreskowy z opakowania."
+        },
+        "latitude": {
+          "name": "Szerokość geograficzna",
+          "description": "Domyślnie lokalizacja Home Assistanta."
+        },
+        "longitude": {
+          "name": "Długość geograficzna",
+          "description": "Domyślnie lokalizacja Home Assistanta."
+        }
+      }
+    },
+    "product_search": {
+      "name": "Szukaj produktów",
+      "description": "Wyszukiwanie produktów Biedronki po nazwie.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Konto Biedronki; gdy puste — pierwsze."
+        },
+        "query": {
+          "name": "Fraza",
+          "description": "Fragment nazwy produktu."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "no_account": {
+      "message": "Brak załadowanego konta Biedronki."
+    },
+    "no_store": {
+      "message": "Na tym koncie nie wybrano sklepu w aplikacji Biedronka."
+    },
+    "product_request_failed": {
+      "message": "Biedronka nie odpowiedziała na zapytanie o produkt: {error}"
     }
   }
 }

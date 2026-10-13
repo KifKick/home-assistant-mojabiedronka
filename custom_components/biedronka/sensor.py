@@ -12,6 +12,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from . import BiedronkaConfigEntry
 from .coordinator import (
@@ -31,6 +32,7 @@ from .models import (
 )
 
 PARALLEL_UPDATES = 0
+MAX_LISTED_MESSAGES = 10
 
 
 async def async_setup_entry(
@@ -55,6 +57,8 @@ async def async_setup_entry(
             BiedronkaCardOffersSensor(coordinator),
             BiedronkaLoyaltyActionsSensor(coordinator),
             BiedronkaLoyaltyBalanceSensor(coordinator),
+            BiedronkaStoreHoursSensor(coordinator),
+            BiedronkaMessagesSensor(coordinator),
         ]
     )
 
@@ -409,4 +413,59 @@ class BiedronkaLoyaltyBalanceSensor(BiedronkaEntity, SensorEntity):
                     "rewards",
                 )
             },
+            "history": [
+                move.as_dict()
+                for move in self.coordinator.data.wallet_moves
+                if move.wallet_id == action.wallet_id
+            ],
+        }
+
+
+class BiedronkaStoreHoursSensor(BiedronkaEntity, SensorEntity):
+    """Today's opening hours of the store chosen in the app."""
+
+    _attr_translation_key = "store_hours"
+
+    def __init__(self, coordinator: BiedronkaCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{self._card}_store_hours"
+
+    @property
+    def native_value(self) -> str | None:
+        data = self.coordinator.data
+        store = data.store if data else None
+        return store.hours(dt_util.now().date().isoformat()) if store else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data
+        store = data.store if data else None
+        return store.as_dict(dt_util.now().date().isoformat()) if store else {}
+
+
+class BiedronkaMessagesSensor(BiedronkaEntity, SensorEntity):
+    """Messages in the app's inbox; the newest one in the attributes."""
+
+    _attr_translation_key = "messages"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: BiedronkaCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{self._card}_messages"
+
+    @property
+    def native_value(self) -> int:
+        return len(self.coordinator.data.messages) if self.coordinator.data else 0
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data
+        if not data or not data.messages:
+            return {}
+        return {
+            "latest": data.messages[0].as_dict(),
+            "messages": [
+                {key: message.as_dict()[key] for key in ("title", "preview", "created_at")}
+                for message in data.messages[:MAX_LISTED_MESSAGES]
+            ],
         }

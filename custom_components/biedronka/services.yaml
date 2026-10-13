@@ -1,0 +1,47 @@
+product_info:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: biedronka
+    ean:
+      required: true
+      example: "5900512300108"
+      selector:
+        text:
+
+product_stock_nearby:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: biedronka
+    ean:
+      required: true
+      example: "5900512300108"
+      selector:
+        text:
+    latitude:
+      selector:
+        number:
+          min: -90
+          max: 90
+          step: any
+    longitude:
+      selector:
+        number:
+          min: -180
+          max: 180
+          step: any
+
+product_search:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: biedronka
+    query:
+      required: true
+      example: "mleko"
+      selector:
+        text:

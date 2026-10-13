@@ -8,6 +8,7 @@ import re
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
+from urllib.parse import quote
 
 import aiohttp
 
@@ -253,6 +254,48 @@ class BiedronkaApi:
     async def wallets(self) -> Any:
         """Balances of the sticker / points wallets: perspectiv_id + balance."""
         return await self.request("GET", "users/me/wallets/")
+
+    async def notifications(self) -> Any:
+        """The app's inbox: {"notifications": [...], "meta": {...}}."""
+        return await self.request("GET", "notifications/")
+
+    async def wallet_history(self, wallet_id: str, end_date: str, page: int = 1) -> Any:
+        """Sticker / points movements of a wallet: {"transactions", "expiring_funds"}.
+
+        `end_date` is an ISO date-time with offset; the history goes back from it.
+        """
+        return await self.request(
+            "GET",
+            f"transactions/wallets/history/{wallet_id}/",
+            params={"end_date": end_date, "page": page},
+        )
+
+    async def product_price(self, store_code: str, ean: str) -> Any:
+        """Price card of a product in a store, as after scanning its barcode."""
+        return await self.request("GET", f"products/price/{store_code}/{ean}/")
+
+    async def product_stock(self, store_code: str, ean: str) -> Any:
+        """Stock of a product in one store: code, city, street, coverage."""
+        return await self.request("GET", f"products/stock/{store_code}/{ean}/")
+
+    async def product_stock_nearby(
+        self, ean: str, latitude: float, longitude: float, user_store: str | None
+    ) -> Any:
+        """Stock of a product in the stores around a point."""
+        return await self.request(
+            "POST",
+            "products/stock/",
+            json={
+                "latitude": latitude,
+                "longitude": longitude,
+                "ean": ean,
+                "user_store": user_store,
+            },
+        )
+
+    async def product_search(self, query: str) -> Any:
+        """Product names (and SAP numbers) matching a search phrase."""
+        return await self.request("GET", f"products/search/{quote(query, safe='')}/")
 
     async def reveal_and_activate(self, offer_id: str) -> Any:
         return await self.request("PATCH", f"offers/{offer_id}/reveal-and-activate/")

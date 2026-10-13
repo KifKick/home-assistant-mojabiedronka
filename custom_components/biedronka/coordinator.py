@@ -28,6 +28,7 @@ from .const import (
 from .exceptions import BiedronkaAuthError, BiedronkaCannotConnect, BiedronkaError
 from .models import (
     EXPIRING_VOUCHER_STATUSES,
+    KIND_MESSAGE,
     OFFER_KINDS,
     RECEIPT_SOURCE_DETAILS,
     RECEIPT_SOURCE_E_RECEIPT,
@@ -39,21 +40,29 @@ from .models import (
     STATUS_CLAIMED,
     STATUS_COOLDOWN,
     STATUS_EXPIRED,
+    AppMessage,
     BiedronkaData,
     LoyaltyAction,
     Receipt,
+    RewardReady,
     ShakeomatOffer,
     ShakeomatReward,
     Voucher,
+    WalletMove,
+    app_messages,
     badge_labels,
+    rewards_ready,
     slim_receipt_lines,
     wallet_balances,
+    wallet_moves,
 )
 
 _LOGGER = logging.getLogger(__name__)
 WARSAW = ZoneInfo("Europe/Warsaw")
 ASSETS_TTL = timedelta(hours=24)
 EPOCH = datetime.min.replace(tzinfo=WARSAW)
+MAX_WALLET_MOVES = 10
+HISTORY_RETRY = timedelta(days=1)
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -172,6 +181,10 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
         self._notified: dict[str, str | None] = {}
         # Categories already tracked; the first refresh of a new one is silent.
         self._notified_kinds: set[str] = set()
+        # Wallet -> last seen campaign balance, for the "stickers changed" event.
+        self._balances: dict[str, float] = {}
+        # Wallet -> when its history last failed (sticker wallets have none).
+        self._history_failed: dict[str, datetime] = {}
         self._receipts: dict[str, Receipt] = {}
         self._assets: dict[str, str] = {}
         self._assets_fetched: datetime | None = None
@@ -221,8 +234,26 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
         )
         self._apply_shakeomats(data, shakeomats)
         data.loyalty_actions = await self._load_loyalty_actions()
+        # A category whose first load failed must not be marked as seen, or
+        # everything already there would be announced once it loads.
+        unloaded: set[str] = set()
+        messages = await self._load_messages()
+        if messages is None:
+            unloaded.add(KIND_MESSAGE)
+        data.messages = messages or []
+        data.wallet_moves = await self._load_wallet_moves(data.active_loyalty_actions)
+        balance_moves = await self._balance_moves(data.active_loyalty_actions)
+        ready = [
+            reward
+            for action in data.active_loyalty_actions
+            for reward in rewards_ready(action)
+        ]
+        self._rearm_rewards(data.active_loyalty_actions)
         data.new_offers = await self._find_new_offers(
             [
+                *data.messages,
+                *balance_moves,
+                *ready,
                 *self._rewards.values(),
                 *self._card_offers,
                 *(
@@ -231,11 +262,14 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
                     if voucher.number and voucher.status in EXPIRING_VOUCHER_STATUSES
                 ),
                 *data.active_loyalty_actions,
-            ]
+            ],
+            unloaded,
         )
         return data
 
-    async def _find_new_offers(self, offers: list[Any]) -> list[Any]:
+    async def _find_new_offers(
+        self, offers: list[Any], unloaded: set[str] | None = None
+    ) -> list[Any]:
         """Offers, vouchers and actions not announced before.
 
         The first refresh of every category only takes note of what is already
@@ -247,12 +281,13 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
             if end and end < now - timedelta(days=1):
                 del self._notified[key]
         new = [offer for offer in offers if offer.key not in self._notified]
-        silent = set(OFFER_KINDS) - self._notified_kinds
+        seen_kinds = set(OFFER_KINDS) - (unloaded or set())
+        silent = seen_kinds - self._notified_kinds
         if not new and not silent:
             return []
         for offer in new:
             self._notified[offer.key] = offer.valid_to
-        self._notified_kinds.update(OFFER_KINDS)
+        self._notified_kinds.update(seen_kinds)
         await self._save_rewards()
         return [offer for offer in new if offer.category not in silent]
 
@@ -274,6 +309,89 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
             if isinstance(item, dict)
         )
         return [action for action in actions if action is not None]
+
+    async def _load_messages(self) -> list[AppMessage] | None:
+        """The app's inbox, newest first; None when it could not be loaded."""
+        try:
+            return app_messages(await self.api.notifications())
+        except BiedronkaAuthError:
+            raise
+        except BiedronkaError as err:
+            _LOGGER.debug("Notifications failed: %s", err)
+            return None
+
+    async def _load_wallet_moves(self, actions: list[LoyaltyAction]) -> list[WalletMove]:
+        """Recent movements from the wallet history, where Biedronka keeps one.
+
+        The app only reads it for points and bottle-return wallets; sticker
+        wallets answer HTTP 503, so a failing wallet is left alone for a day.
+        """
+        now = datetime.now(WARSAW)
+        moves: list[WalletMove] = []
+        for action in actions:
+            wallet = action.wallet_id
+            failed_at = self._history_failed.get(wallet or "")
+            if not wallet or (failed_at and now - failed_at < HISTORY_RETRY):
+                continue
+            try:
+                # Like the app: "now" with its UTC offset; history goes back from it.
+                payload = await self.api.wallet_history(
+                    wallet, now.isoformat(timespec="seconds")
+                )
+            except BiedronkaAuthError:
+                raise
+            except BiedronkaError as err:
+                _LOGGER.debug("Wallet history %s failed: %s", wallet, err)
+                self._history_failed[wallet] = now
+                continue
+            self._history_failed.pop(wallet, None)
+            moves.extend(wallet_moves(payload, wallet, action)[:MAX_WALLET_MOVES])
+        return moves
+
+    async def _balance_moves(self, actions: list[LoyaltyAction]) -> list[WalletMove]:
+        """A movement for every campaign balance that changed since the last refresh.
+
+        Works for every wallet, history or not. The last balances are stored,
+        so a change made while Home Assistant was down is announced too.
+        """
+        now = datetime.now(WARSAW).isoformat(timespec="seconds")
+        moves: list[WalletMove] = []
+        changed = False
+        for action in actions:
+            wallet, balance = action.wallet_id, action.balance
+            if not wallet or balance is None:
+                continue
+            previous = self._balances.get(wallet)
+            if previous == balance:
+                continue
+            changed = True
+            self._balances[wallet] = balance
+            if previous is not None:
+                moves.append(
+                    WalletMove(
+                        wallet_id=wallet,
+                        action=action.name,
+                        when=now,
+                        delta=balance - previous,
+                        balance=balance,
+                        unit=action.unit,
+                        ends=action.end_on,
+                    )
+                )
+        if changed and not moves:
+            await self._save_rewards()
+        return moves
+
+    def _rearm_rewards(self, actions: list[LoyaltyAction]) -> None:
+        """Forget a reward once the balance drops below it, so reaching it again
+        (after claiming one) is announced again."""
+        for action in actions:
+            if action.balance is None:
+                continue
+            for reward in action.rewards:
+                cost = reward.get("cost")
+                if cost is not None and cost > action.balance:
+                    self._notified.pop(RewardReady(action, reward).key, None)
 
     async def _today_total(
         self, first_page: list[dict[str, Any]], page_meta: dict[str, Any]
@@ -490,6 +608,13 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
         kinds = stored.get("notified_kinds") if isinstance(stored, dict) else None
         if isinstance(kinds, list):
             self._notified_kinds = {str(kind) for kind in kinds}
+        balances = stored.get("balances") if isinstance(stored, dict) else None
+        if isinstance(balances, dict):
+            self._balances = {
+                str(wallet): float(value)
+                for wallet, value in balances.items()
+                if isinstance(value, (int, float))
+            }
         for entry in entries or []:
             if not isinstance(entry, dict):
                 continue
@@ -573,6 +698,7 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
                 "rewards": [reward.as_dict() for reward in self._rewards.values()],
                 "notified": self._notified,
                 "notified_kinds": sorted(self._notified_kinds),
+                "balances": self._balances,
             }
         )
 

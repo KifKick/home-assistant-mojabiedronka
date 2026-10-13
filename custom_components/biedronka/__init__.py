@@ -6,8 +6,10 @@ from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .api import BiedronkaApi
 from .const import (
@@ -21,8 +23,16 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import BiedronkaCoordinator
+from .services import async_setup_services
 
 type BiedronkaConfigEntry = ConfigEntry[BiedronkaCoordinator]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    async_setup_services(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: BiedronkaConfigEntry) -> bool:

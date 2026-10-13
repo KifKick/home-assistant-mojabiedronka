@@ -25,13 +25,30 @@ KIND_SHAKEOMARKA = "shakeomarka"
 KIND_CARD = "card"
 KIND_VOUCHER = "voucher"
 KIND_LOYALTY = "loyalty"
+KIND_MESSAGE = "message"
+KIND_STICKERS = "stickers"
+KIND_REWARD = "loyalty_reward"
 # Every kind that gets a "new ..." event entity.
-OFFER_KINDS = (KIND_SHAKEOMAT, KIND_SHAKEOMARKA, KIND_CARD, KIND_VOUCHER, KIND_LOYALTY)
+OFFER_KINDS = (
+    KIND_SHAKEOMAT,
+    KIND_SHAKEOMARKA,
+    KIND_CARD,
+    KIND_VOUCHER,
+    KIND_LOYALTY,
+    KIND_MESSAGE,
+    KIND_STICKERS,
+    KIND_REWARD,
+)
 
 # The live API says "ongoing"; the app's own enum knows "ACTIVE".
 LOYALTY_ACTIVE_STATUSES = frozenset({"ongoing", "active"})
 _LOYALTY_UNITS = {"CARRIER": "naklejki", "DOTS": "punkty"}
 _MAX_NUMBERED_AWARDS = 9
+# One / 2-4 / many, for "1 naklejka", "3 naklejki", "10 naklejek".
+_UNIT_FORMS = {
+    "naklejki": ("naklejka", "naklejki", "naklejek"),
+    "punkty": ("punkt", "punkty", "punktów"),
+}
 
 VOUCHER_STATUS_READY = "READY_TO_USE"
 VOUCHER_STATUS_PENDING = "PENDING"
@@ -661,6 +678,197 @@ def _loyalty_rewards(item: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(rewards, key=lambda r: (r["cost"] is None, r["cost"] or 0))
 
 
+@dataclass
+class AppMessage:
+    """A message from the app's inbox (notifications/)."""
+
+    message_id: str
+    title: str | None = None
+    preview: str | None = None
+    message: str | None = None
+    created_at: str | None = None
+    image_url: str | None = None
+
+    category = KIND_MESSAGE
+
+    @property
+    def key(self) -> str:
+        return f"message_{self.message_id}"
+
+    @property
+    def valid_to(self) -> str | None:
+        return None
+
+    @property
+    def summary(self) -> str:
+        text = self.preview or self.message or ""
+        if self.title and text:
+            return f"{self.title}: {text}"
+        return self.title or text or "Nowa wiadomość w aplikacji Biedronka."
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.message_id,
+            "title": self.title,
+            "preview": self.preview,
+            "message": self.message,
+            "created_at": self.created_at,
+            "image_url": self.image_url,
+            "summary": self.summary,
+        }
+
+    @classmethod
+    def from_payload(cls, item: Any) -> AppMessage | None:
+        if not isinstance(item, dict) or item.get("id") in (None, ""):
+            return None
+        return cls(
+            message_id=str(item["id"]),
+            title=_str_or_none(localized_text(item.get("title"))),
+            preview=_str_or_none(localized_text(item.get("message_preview"))),
+            message=_str_or_none(localized_text(item.get("message"))),
+            created_at=_str_or_none(item.get("created_at")),
+            image_url=_str_or_none(item.get("main_image_url") or item.get("thumbnail_url")),
+        )
+
+
+def app_messages(payload: Any) -> list[AppMessage]:
+    items = payload.get("notifications") if isinstance(payload, dict) else payload
+    messages = (AppMessage.from_payload(item) for item in items or [])
+    return sorted(
+        (message for message in messages if message),
+        key=lambda message: message.created_at or "",
+        reverse=True,
+    )
+
+
+@dataclass
+class WalletMove:
+    """A sticker / points movement from the wallet history."""
+
+    wallet_id: str
+    action: str | None
+    when: str | None
+    delta: float
+    balance: float | None = None
+    label: str | None = None
+    info: str | None = None
+    unit: str | None = None
+    ends: str | None = None
+
+    category = KIND_STICKERS
+
+    @property
+    def key(self) -> str:
+        return f"wallet_{self.wallet_id}_{self.when}_{self.delta:g}"
+
+    @property
+    def valid_to(self) -> str | None:
+        # Forgotten once the campaign is over.
+        return self.ends
+
+    @property
+    def summary(self) -> str:
+        sign = "+" if self.delta > 0 else "−"
+        line = sign + count_with_unit(abs(self.delta), self.unit)
+        if self.action:
+            line += f" ({self.action})"
+        detail = self.label or self.info
+        if detail:
+            line += f": {detail}"
+        if self.balance is not None:
+            line += f". Masz teraz {self.balance:g}"
+        return line + "."
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "wallet_id": self.wallet_id,
+            "action": self.action,
+            "when": self.when,
+            "delta": self.delta,
+            "balance": self.balance,
+            "label": self.label,
+            "info": self.info,
+            "summary": self.summary,
+        }
+
+
+def wallet_moves(
+    payload: Any, wallet_id: str, action: LoyaltyAction | None
+) -> list[WalletMove]:
+    """Newest first; `balance` is filled for the newest move from the action."""
+    items = payload.get("transactions") if isinstance(payload, dict) else None
+    moves: list[WalletMove] = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            delta = float(item.get("balance_delta") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not delta:
+            continue
+        moves.append(
+            WalletMove(
+                wallet_id=wallet_id,
+                action=action.name if action else None,
+                when=_str_or_none(item.get("transaction_datetime")),
+                delta=delta,
+                label=_str_or_none(localized_text(item.get("operation_type_label"))),
+                info=_str_or_none(localized_text(item.get("additional_info"))),
+                unit=action.unit if action else None,
+                ends=action.end_on if action else None,
+            )
+        )
+    moves.sort(key=lambda move: move.when or "", reverse=True)
+    if moves and action is not None:
+        moves[0].balance = action.balance
+    return moves
+
+
+@dataclass
+class RewardReady:
+    """A loyalty reward the current balance now covers."""
+
+    action: LoyaltyAction
+    reward: dict[str, Any]
+
+    category = KIND_REWARD
+
+    @property
+    def key(self) -> str:
+        return f"reward_{self.action.action_id}_{self.reward.get('cost')}"
+
+    @property
+    def valid_to(self) -> str | None:
+        return self.action.end_on
+
+    @property
+    def summary(self) -> str:
+        unit = self.action.unit
+        balance = self.action.balance
+        cost = self.reward.get("cost")
+        line = f"{self.action.name or 'Akcja Biedronki'}: "
+        if balance is not None:
+            line += f"masz {count_with_unit(balance, unit)} — "
+        line += f"możesz odebrać {self.reward.get('title') or 'nagrodę'}"
+        if cost is not None:
+            line += f" ({count_with_unit(cost, unit)})"
+        return line + "."
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "action": self.action.name,
+            "balance": self.action.balance,
+            "reward": self.reward,
+            "image_url": self.reward.get("image_url"),
+            "summary": self.summary,
+        }
+
+
+def rewards_ready(action: LoyaltyAction) -> list[RewardReady]:
+    return [RewardReady(action, reward) for reward in action.available_rewards]
+
+
 def wallet_balances(payload: Any) -> dict[str, float]:
     """users/me/wallets/ -> {perspectiv_id: balance}."""
     balances: dict[str, float] = {}
@@ -674,12 +882,123 @@ def wallet_balances(payload: Any) -> dict[str, float]:
     return balances
 
 
+def count_with_unit(count: float, unit: str | None) -> str:
+    """'10 naklejek', '2 naklejki', '1 punkt' — Polish plural of the campaign unit."""
+    one, few, many = _UNIT_FORMS.get(unit or "naklejki", (unit, unit, unit))
+    if count != int(count):
+        form = few
+    elif count == 1:
+        form = one
+    elif count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
+        form = few
+    else:
+        form = many
+    return f"{count:g} {form}"
+
+
 def _str_or_none(value: Any) -> str | None:
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return str(value)
     if isinstance(value, str) and value.strip():
         return value.strip()
     return None
+
+
+@dataclass
+class BiedronkaStore:
+    """The store chosen in the app (`store` in users/me/), with its opening hours."""
+
+    code: str
+    name: str | None = None
+    street: str | None = None
+    zip_code: str | None = None
+    city: str | None = None
+    # [{"date": "2026-10-13", "opening": "06:00", "closing": "22:00", "closed": False}]
+    days: list[dict[str, Any]] = field(default_factory=list)
+    closed_now: bool | None = None
+    target_hour: str | None = None
+    refurbishment: bool = False
+
+    @property
+    def address(self) -> str | None:
+        """'Warszawa, ul. Przykładowa 1' — like the app."""
+        parts = [part for part in (self.city, self.street) if part]
+        return ", ".join(parts) or None
+
+    def day(self, date: str) -> dict[str, Any] | None:
+        return next((day for day in self.days if day["date"] == date), None)
+
+    def hours(self, date: str) -> str | None:
+        """'06:00–22:00', or None when closed (or unknown) that day."""
+        day = self.day(date)
+        if not day or day["closed"] or not day["opening"] or not day["closing"]:
+            return None
+        return f"{day['opening']}–{day['closing']}"
+
+    def open_at(self, now: datetime) -> bool | None:
+        """Open right now, from today's hours; the API flag is only as fresh as the poll."""
+        if self.refurbishment:
+            return False
+        local = now.astimezone(_WARSAW)
+        day = self.day(local.date().isoformat())
+        if day is None:
+            return None if self.closed_now is None else not self.closed_now
+        if day["closed"] or not day["opening"] or not day["closing"]:
+            return False
+        clock = local.strftime("%H:%M")
+        return day["opening"] <= clock < day["closing"]
+
+    def as_dict(self, today: str) -> dict[str, Any]:
+        return {
+            "code": self.code,
+            "name": self.name,
+            "address": self.address,
+            "zip_code": self.zip_code,
+            "today": self.hours(today),
+            "closed_today": self.hours(today) is None,
+            "in_refurbishment": self.refurbishment,
+            "target_hour": self.target_hour,
+            "days": [
+                {"date": day["date"], "hours": self.hours(day["date"])}
+                for day in self.days
+            ],
+        }
+
+    @classmethod
+    def from_payload(cls, store: Any) -> BiedronkaStore | None:
+        if not isinstance(store, dict) or not store.get("code"):
+            return None
+        days = []
+        for item in store.get("opening_hours") or []:
+            if not isinstance(item, dict) or not item.get("date"):
+                continue
+            days.append(
+                {
+                    "date": str(item["date"])[:10],
+                    "opening": _hhmm(item.get("opening_time")),
+                    "closing": _hhmm(item.get("closing_time")),
+                    "closed": item.get("store_is_closed") is True,
+                }
+            )
+        closed_now = store.get("is_closed_now")
+        return cls(
+            code=str(store["code"]),
+            name=_str_or_none(store.get("name")),
+            street=_str_or_none(store.get("street")),
+            zip_code=_str_or_none(store.get("zip_code")),
+            city=_str_or_none(store.get("city")),
+            days=days,
+            closed_now=closed_now if isinstance(closed_now, bool) else None,
+            target_hour=_str_or_none(store.get("target_hour")),
+            refurbishment=store.get("is_in_refurbishment") is True,
+        )
+
+
+def _hhmm(value: Any) -> str | None:
+    """'06:00:00' -> '06:00'."""
+    if not isinstance(value, str) or len(value) < 5:
+        return None
+    return value[:5]
 
 
 @dataclass
@@ -698,9 +1017,16 @@ class BiedronkaData:
     reward_history: list[ShakeomatReward] = field(default_factory=list)
     card_offers: list[ShakeomatReward] = field(default_factory=list)
     loyalty_actions: list[LoyaltyAction] = field(default_factory=list)
+    messages: list[AppMessage] = field(default_factory=list)
+    wallet_moves: list[WalletMove] = field(default_factory=list)
     # Offers, vouchers and actions first seen in this refresh; event entities
     # announce them. Each has `category`, `key`, `valid_to` and `as_dict()`.
     new_offers: list[Any] = field(default_factory=list)
+
+    @property
+    def store(self) -> BiedronkaStore | None:
+        """The store chosen in the app, from the profile already fetched."""
+        return BiedronkaStore.from_payload(self.user.get("store"))
 
     @property
     def active_loyalty_actions(self) -> list[LoyaltyAction]:

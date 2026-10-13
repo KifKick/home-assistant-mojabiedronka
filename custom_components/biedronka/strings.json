@@ -98,6 +98,12 @@
       },
       "loyalty_balance": {
         "name": "Loyalty balance"
+      },
+      "store_hours": {
+        "name": "Store opening hours"
+      },
+      "messages": {
+        "name": "Messages"
       }
     },
     "button": {
@@ -160,7 +166,109 @@
             }
           }
         }
+      },
+      "new_message_offer": {
+        "name": "New app message",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "New offer"
+            }
+          }
+        }
+      },
+      "new_stickers_offer": {
+        "name": "Stickers change",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "New offer"
+            }
+          }
+        }
+      },
+      "new_loyalty_reward_offer": {
+        "name": "Reward ready to claim",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "New offer"
+            }
+          }
+        }
       }
+    },
+    "binary_sensor": {
+      "store_open": {
+        "name": "Store open",
+        "state": {
+          "on": "Open",
+          "off": "Closed"
+        }
+      }
+    }
+  },
+  "services": {
+    "product_info": {
+      "name": "Product price and stock",
+      "description": "Price card and stock of a product (by barcode) in the store chosen in the app.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Biedronka account to use; the first one when empty."
+        },
+        "ean": {
+          "name": "Barcode (EAN)",
+          "description": "Barcode printed on the product."
+        }
+      }
+    },
+    "product_stock_nearby": {
+      "name": "Product stock nearby",
+      "description": "Stores near a location that have the product.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Biedronka account to use; the first one when empty."
+        },
+        "ean": {
+          "name": "Barcode (EAN)",
+          "description": "Barcode printed on the product."
+        },
+        "latitude": {
+          "name": "Latitude",
+          "description": "Defaults to the Home Assistant location."
+        },
+        "longitude": {
+          "name": "Longitude",
+          "description": "Defaults to the Home Assistant location."
+        }
+      }
+    },
+    "product_search": {
+      "name": "Search products",
+      "description": "Search Biedronka products by name.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Biedronka account to use; the first one when empty."
+        },
+        "query": {
+          "name": "Query",
+          "description": "Part of the product name."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "no_account": {
+      "message": "No loaded Biedronka account."
+    },
+    "no_store": {
+      "message": "No store is chosen in the Biedronka app for this account."
+    },
+    "product_request_failed": {
+      "message": "Biedronka did not answer the product request: {error}"
     }
   }
 }

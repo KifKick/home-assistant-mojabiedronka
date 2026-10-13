@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -9,7 +10,7 @@ from homeassistant.core import HomeAssistant
 
 from . import BiedronkaConfigEntry
 from .const import CONF_ACCESS_TOKEN, CONF_CARD_NUMBER, CONF_PHONE, CONF_REFRESH_TOKEN
-from .coordinator import as_sections
+from .coordinator import WARSAW, as_sections
 from .exceptions import BiedronkaError
 
 TO_REDACT = {
@@ -48,14 +49,27 @@ async def async_get_config_entry_diagnostics(
         ("loyalty_actions", api.loyalty_actions),
         ("wallets", api.wallets),
         ("coupons", api.coupons),
+        ("notifications", api.notifications),
     ):
         try:
             extra[name] = await call()
         except BiedronkaError as err:
             extra[name] = {"error": str(err)}
+    data = coordinator.data
+    now = datetime.now(WARSAW).isoformat(timespec="seconds")
+    for action in data.active_loyalty_actions if data else []:
+        if not action.wallet_id:
+            continue
+        try:
+            history = await api.wallet_history(action.wallet_id, now)
+        except BiedronkaError as err:
+            history = {"error": str(err)}
+        extra.setdefault("wallet_history", {})[action.wallet_id] = history
     return async_redact_data(
         {
             **extra,
+            # The app's chosen store from users/me/ (not personal data).
+            "store": (data.user.get("store") if data else None),
             "entry": {"data": dict(entry.data), "options": dict(entry.options)},
             "rewards": [
                 reward.as_dict() for reward in coordinator.data.reward_history

@@ -38,7 +38,7 @@ CONF_APP_VERSION: Final = "app_version"
 DEFAULT_SCAN_INTERVAL = timedelta(minutes=15)
 DEFAULT_AUTO_SHAKEOMAT: Final = False
 
-PLATFORMS: Final = ["sensor", "button", "switch", "event"]
+PLATFORMS: Final = ["sensor", "binary_sensor", "button", "switch", "event"]
 
 SHAKEOMAT_TYPES: Final = ("SHAKEOMAT", "SHAKEOMAT_2", "SHAKEOMARKA")
 MAX_REWARD_HISTORY: Final = 20

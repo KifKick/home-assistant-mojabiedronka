@@ -29,6 +29,8 @@ class FullFakeApi(FakeApi):
     coupons_payload: dict | None = None
     loyalty: list | None = None
     wallets_payload: list | None = None
+    notifications_payload: dict | None = None
+    history_payload: dict | None = None
 
     async def coupons(self):
         return self.coupons_payload or {"meta": {"kinds": []}, "coupons": []}
@@ -38,6 +40,12 @@ class FullFakeApi(FakeApi):
 
     async def wallets(self):
         return self.wallets_payload or []
+
+    async def notifications(self):
+        return self.notifications_payload or {"notifications": []}
+
+    async def wallet_history(self, wallet_id, end_date, page=1):
+        return self.history_payload or {"transactions": []}
 
 
 @pytest.fixture

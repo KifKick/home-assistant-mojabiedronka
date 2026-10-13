@@ -72,8 +72,12 @@ The official app **never shows** `refresh_token` in settings — that is expecte
 | Card offers | Number of active "Tylko dla Ciebie" offers Biedronka assigned to the card (e.g. WELCOME). Each one in the `offers` attribute with prices, limit, dates and `summary` |
 | New Shakeomat / Shakeomarka / card offer | Event entities: one `new_offer` event per offer, the first time the integration sees it — including offers revealed in the phone app (picked up on the next refresh). Event data = the full offer with `summary`. Offers already active when the integration starts are not announced |
 | Loyalty actions | Active sticker / points campaigns ("Akcja" in the app); all of them, with rewards and wallet balance, in `actions` |
-| Loyalty balance | Stickers or points collected in the current campaign. Attributes: `unit`, `collect_until`, `end_on`, `rewards` (sorted by cost), `available_rewards`, `next_reward`, `missing_to_next_reward` |
+| Loyalty balance | Stickers or points collected in the current campaign. Attributes: `unit`, `collect_until`, `end_on`, `rewards` (sorted by cost), `available_rewards`, `next_reward`, `missing_to_next_reward`, and `history` — the last movements from the wallet history, where Biedronka keeps one (points wallets do; sticker wallets answer HTTP 503 and are retried once a day) |
 | New voucher / New loyalty action | Event entities like the offer ones: one `new_offer` event per new ready/pending voucher or newly started campaign, with `summary` |
+| Stickers change | Event entity: one `new_offer` event whenever a campaign balance changes (stickers for a purchase, stickers spent on a reward), with `delta`, `balance` and `summary`, e.g. *„+2 naklejki (Gang Zaradniaków). Masz teraz 10.”* The last balance is stored, so a change made while Home Assistant was down is announced too |
+| Reward ready to claim | Event entity: one `new_offer` event when the balance first covers a reward, with the reward and `summary`. After you claim it and the balance drops below the cost, reaching it again is announced again |
+| Messages / New app message | Messages in the app's inbox (`notifications/`), the newest in `latest`; the event entity fires once per new message with `title`, `preview`, `message`, `image_url` and `summary` |
+| Store opening hours / Store open | Today's hours of the store chosen in the app (`store` in `users/me/`, no extra request), with address, `target_hour` and the days the API returns in the attributes; Store open is off outside today's hours or while the store is being refurbished |
 | Reveal Shakeomats | `PATCH …/offers/{id}/reveal-and-activate/` for each available card — Shakeomat and Shakeomarka alike (the app uses the same call for both) |
 | Auto Shakeomat | Off by default — when enabled, reveals Shakeomat and Shakeomarka cards on every refresh, using the daily limit the same way as the phone |
 
@@ -87,9 +91,26 @@ Claimed offers are stored in integration storage and survive Home Assistant rest
 
 Refresh interval: every 15 minutes (integration options: 5–120 min).
 
+### Services
+
+All three return data (call them from Developer tools → Actions with "Return response", or in a script with `response_variable`). `config_entry_id` picks the card when you have several; empty = the first one.
+
+| Service | Description |
+| --- | --- |
+| `biedronka.product_info` | Price card (price, regular price, promotion, limit, unit price, Omnibus) and stock of a product by barcode (`ean`) in the store chosen in the app |
+| `biedronka.product_stock_nearby` | Stores that have the product, near `latitude`/`longitude` (default: Home Assistant location) |
+| `biedronka.product_search` | Products whose name matches `query` |
+
+```yaml
+action: biedronka.product_info
+data:
+  ean: "5900512300108"
+response_variable: product
+```
+
 ### Out of scope for v0.1
 
-BLIK, complaints, leaflets, stock levels, household, surveys.
+BLIK, complaints, leaflets, household, surveys.
 
 ### Development / debug
 
@@ -101,7 +122,7 @@ Details for local HA without the add-on: [`.devcontainer/README.md`](.devcontain
 
 Locally without a container: `scripts/setup` then `scripts/develop`. The `config/` directory is in `.gitignore`.
 
-**Diagnostics** (⋮ → Download diagnostics) include the raw dashboard, carousels, loyalty actions, wallets and coupons, with tokens, card number, phone and personal data redacted — handy when the app changes its API.
+**Diagnostics** (⋮ → Download diagnostics) include the raw dashboard, carousels, loyalty actions, wallets, coupons and app messages, with tokens, card number, phone and personal data redacted — handy when the app changes its API.
 
 ### API (app 2.24.0)
 
@@ -169,8 +190,12 @@ Oficjalna apka **nigdy nie pokazuje** `refresh_token` w ustawieniach — to norm
 | Oferty z kartą | Liczba aktywnych ofert „Tylko dla Ciebie” przydzielonych karcie przez Biedronkę (np. WELCOME). Każda w atrybucie `offers` z cenami, limitem, datami i `summary` |
 | Nowa oferta Shakeomatu / Shakeomarki / z kartą | Encje zdarzeń: jedno zdarzenie `new_offer` na ofertę, gdy integracja zobaczy ją pierwszy raz — także oferty odsłonięte w aplikacji (przy najbliższym odświeżeniu). Dane zdarzenia = pełna oferta z `summary`. Oferty aktywne w chwili uruchomienia integracji nie są ogłaszane |
 | Akcje lojalnościowe | Aktywne akcje z naklejkami / punktami („Akcja” w aplikacji); wszystkie, z nagrodami i saldem, w atrybucie `actions` |
-| Saldo akcji lojalnościowej | Naklejki lub punkty zebrane w bieżącej akcji. Atrybuty: `unit`, `collect_until`, `end_on`, `rewards` (posortowane według kosztu), `available_rewards`, `next_reward`, `missing_to_next_reward` |
+| Saldo akcji lojalnościowej | Naklejki lub punkty zebrane w bieżącej akcji. Atrybuty: `unit`, `collect_until`, `end_on`, `rewards` (posortowane według kosztu), `available_rewards`, `next_reward`, `missing_to_next_reward` oraz `history` — ostatnie ruchy z historii portfela, jeśli Biedronka ją prowadzi (portfele punktów tak; portfele naklejek odpowiadają HTTP 503 i są ponawiane raz na dobę) |
 | Nowy voucher / Nowa akcja lojalnościowa | Encje zdarzeń jak dla ofert: jedno zdarzenie `new_offer` na nowy voucher (gotowy / oczekujący) lub nowo rozpoczętą akcję, z `summary` |
+| Zmiana naklejek | Encja zdarzeń: jedno zdarzenie `new_offer` przy każdej zmianie salda akcji (naklejki za zakupy, naklejki wydane na nagrodę), z `delta`, `balance` i `summary`, np. *„+2 naklejki (Gang Zaradniaków). Masz teraz 10.”* Ostatnie saldo jest zapamiętywane, więc zmiana z czasu, gdy Home Assistant był wyłączony, też zostanie ogłoszona |
+| Nagroda do odebrania | Encja zdarzeń: jedno zdarzenie `new_offer`, gdy saldo pierwszy raz wystarcza na nagrodę, z nagrodą i `summary`. Po odebraniu nagrody, gdy saldo spadnie poniżej kosztu, ponowne uzbieranie jest znów ogłaszane |
+| Wiadomości / Nowa wiadomość | Wiadomości ze skrzynki w aplikacji (`notifications/`), najnowsza w `latest`; encja zdarzeń wysyła jedno zdarzenie na nową wiadomość z `title`, `preview`, `message`, `image_url` i `summary` |
+| Godziny otwarcia sklepu / Sklep otwarty | Dzisiejsze godziny sklepu wybranego w aplikacji (`store` w `users/me/`, bez dodatkowego zapytania), z adresem, `target_hour` i dniami zwróconymi przez API w atrybutach; Sklep otwarty jest wyłączony poza dzisiejszymi godzinami i w czasie remontu sklepu |
 | Odbierz Shakeomaty | `PATCH …/offers/{id}/reveal-and-activate/` dla każdej dostępnej karty — Shakeomatu i Shakeomarki (aplikacja używa tego samego wywołania dla obu) |
 | Auto Shakeomat | Domyślnie wyłączony — po włączeniu odsłania karty Shakeomatu i Shakeomarki przy każdym odświeżeniu, zużywając dzienny limit tak samo jak telefon |
 
@@ -184,9 +209,26 @@ Odebrane oferty trafiają do magazynu integracji i przeżywają restart Home Ass
 
 Odświeżanie: co 15 minut (opcje integracji: 5–120 min).
 
+### Usługi
+
+Wszystkie trzy zwracają dane (wywołaj w Narzędzia deweloperskie → Akcje z „Zwróć odpowiedź” albo w skrypcie z `response_variable`). `config_entry_id` wybiera kartę, gdy masz kilka; puste = pierwsza.
+
+| Usługa | Opis |
+| --- | --- |
+| `biedronka.product_info` | Cena (cena, cena regularna, promocja, limit, cena jednostkowa, Omnibus) i dostępność produktu po kodzie kreskowym (`ean`) w sklepie wybranym w aplikacji |
+| `biedronka.product_stock_nearby` | Sklepy z produktem w pobliżu `latitude`/`longitude` (domyślnie lokalizacja Home Assistanta) |
+| `biedronka.product_search` | Produkty, których nazwa pasuje do `query` |
+
+```yaml
+action: biedronka.product_info
+data:
+  ean: "5900512300108"
+response_variable: produkt
+```
+
 ### Poza zakresem v0.1
 
-BLIK, reklamacje, gazetki, stany magazynowe, gospodarstwo domowe, ankiety.
+BLIK, reklamacje, gazetki, gospodarstwo domowe, ankiety.
 
 ### Development / debug
 
@@ -198,7 +240,7 @@ Szczegóły lokalnego HA bez add-onu: [`.devcontainer/README.md`](.devcontainer/
 
 Lokalnie bez kontenera: `scripts/setup` potem `scripts/develop`. Katalog `config/` jest w `.gitignore`.
 
-**Diagnostyka** (⋮ → Pobierz diagnostykę) zawiera surowy dashboard, karuzele, akcje lojalnościowe, portfele i kupony, z ukrytymi tokenami, numerem karty, telefonem i danymi osobowymi — przydaje się, gdy aplikacja zmieni API.
+**Diagnostyka** (⋮ → Pobierz diagnostykę) zawiera surowy dashboard, karuzele, akcje lojalnościowe, portfele, kupony i wiadomości z aplikacji, z ukrytymi tokenami, numerem karty, telefonem i danymi osobowymi — przydaje się, gdy aplikacja zmieni API.
 
 ### API (aplikacja 2.24.0)
 
