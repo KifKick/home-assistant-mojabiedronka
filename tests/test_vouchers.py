@@ -62,6 +62,12 @@ class VoucherFakeApi:
             raise BiedronkaError("http_500")
         return self.coupons_payload
 
+    async def loyalty_actions(self):
+        return []
+
+    async def wallets(self):
+        return []
+
 
 @pytest.fixture
 def coordinator_factory(hass):
@@ -103,6 +109,7 @@ async def test_coupons_keep_polish_text_status_and_badges(coordinator_factory):
     assert [voucher.number for voucher in data.vouchers] == ["USED", "SOON", "LATER"]
     soon = data.vouchers[1]
     assert soon.as_dict() == {
+        "summary": soon.summary,
         "kind": "E-voucher",
         "number": "SOON",
         "status": "READY_TO_USE",
@@ -114,6 +121,7 @@ async def test_coupons_keep_polish_text_status_and_badges(coordinator_factory):
         "burned_location": None,
         "badges": ["Nowy"],
     }
+    assert soon.summary.startswith("Voucher: Rabat 5 zł. One use. Ważne ")
     used = data.vouchers[0]
     assert used.status == "BURNED"
     assert used.discount == "Used offer"

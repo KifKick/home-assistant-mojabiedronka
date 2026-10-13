@@ -1,21 +1,75 @@
 {
   "entity": {
     "sensor": {
-      "card": { "default": "mdi:credit-card-chip-outline" },
-      "last_transaction": { "default": "mdi:receipt-text-outline" },
-      "today_spend": { "default": "mdi:cash" },
-      "receipts": { "default": "mdi:receipt-text" },
-      "vouchers": { "default": "mdi:ticket-percent-outline" },
-      "voucher_expiry": { "default": "mdi:calendar-clock" },
-      "shakeomat": { "default": "mdi:gift-outline" },
-      "shakeomat_available": { "default": "mdi:gift-open-outline" },
-      "shakeomat_last_offer": { "default": "mdi:gift" }
+      "card": {
+        "default": "mdi:credit-card-chip-outline"
+      },
+      "last_transaction": {
+        "default": "mdi:receipt-text-outline"
+      },
+      "today_spend": {
+        "default": "mdi:cash"
+      },
+      "receipts": {
+        "default": "mdi:receipt-text"
+      },
+      "vouchers": {
+        "default": "mdi:ticket-percent-outline"
+      },
+      "voucher_expiry": {
+        "default": "mdi:calendar-clock"
+      },
+      "shakeomat": {
+        "default": "mdi:gift-outline"
+      },
+      "shakeomat_available": {
+        "default": "mdi:gift-open-outline"
+      },
+      "shakeomat_last_offer": {
+        "default": "mdi:gift"
+      },
+      "shakeomarka": {
+        "default": "mdi:star-four-points-outline"
+      },
+      "shakeomarka_last_offer": {
+        "default": "mdi:star-four-points"
+      },
+      "card_offers": {
+        "default": "mdi:tag-heart-outline"
+      },
+      "loyalty_actions": {
+        "default": "mdi:sticker-outline"
+      },
+      "loyalty_balance": {
+        "default": "mdi:sticker-check-outline"
+      }
+    },
+    "event": {
+      "new_shakeomat_offer": {
+        "default": "mdi:gift"
+      },
+      "new_shakeomarka_offer": {
+        "default": "mdi:star-four-points"
+      },
+      "new_card_offer": {
+        "default": "mdi:tag-heart"
+      },
+      "new_voucher_offer": {
+        "default": "mdi:ticket-percent"
+      },
+      "new_loyalty_offer": {
+        "default": "mdi:sticker-plus-outline"
+      }
     },
     "button": {
-      "shakeomat_activate": { "default": "mdi:gesture-tap-button" }
+      "shakeomat_activate": {
+        "default": "mdi:gesture-tap-button"
+      }
     },
     "switch": {
-      "auto_shakeomat": { "default": "mdi:auto-fix" }
+      "auto_shakeomat": {
+        "default": "mdi:auto-fix"
+      }
     }
   }
 }

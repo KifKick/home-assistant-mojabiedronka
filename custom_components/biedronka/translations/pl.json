@@ -3,7 +3,18 @@
     "step": {
       "user": {
         "title": "Biedronka",
-        "description": "Zaloguj się przez dodatek Browser Companion (Chromium w pasku bocznym). Captcha i SMS zostają w tej przeglądarce."
+        "description": "Wybierz sposób logowania. Rekomendowany jest Browser Companion; ręczny kod autoryzacji to opcjonalna alternatywa działająca w każdej przeglądarce.",
+        "menu_options": {
+          "companion": "Browser Companion (rekomendowane)",
+          "manual": "Ręczny kod autoryzacji (opcjonalnie): zaloguj się w przeglądarce i wklej przekierowanie"
+        }
+      },
+      "manual": {
+        "title": "Logowanie do Moja Biedronka",
+        "description": "1. Na komputerze otwórz link: [konto.biedronka.pl]({auth_url})\n2. Wpisz numer telefonu i rozwiąż captchę. **Zanim wpiszesz kod SMS**, naciśnij F12 i otwórz zakładkę **Konsola**.\n3. Wpisz kod SMS. Strona nigdzie nie przekieruje — tak ma być.\n4. Skopiuj z konsoli linię `Failed to launch 'app://cma20.biedronka.pl?code=…'` (albo sam adres `app://…`) i wklej poniżej. Jeśli konsola jest pusta, użyj zakładki **Sieć**: ostatnie żądanie ma nagłówek `Location: app://…`.\n\nKod wygasa po około minucie, więc wklej go od razu. Jeśli zostanie odrzucony, zaloguj się ponownie tym samym linkiem.",
+        "data": {
+          "redirect_url": "Adres app:// albo kod"
+        }
       },
       "companion": {
         "title": "Browser Companion",
@@ -17,7 +28,8 @@
     "error": {
       "cannot_connect": "Nie udało się połączyć z serwerami Biedronki.",
       "invalid_token": "Token odrzucony. Zaloguj się ponownie.",
-      "companion_unavailable": "Browser Companion nie przechwycił logowania. Uruchom dodatek i spróbuj ponownie."
+      "companion_unavailable": "Browser Companion nie przechwycił logowania. Uruchom dodatek i spróbuj ponownie.",
+      "invalid_code": "Brak kodu, kod wygasł albo został już użyty. Zaloguj się ponownie przez link i od razu wklej nowy adres app://."
     },
     "abort": {
       "already_configured": "Ta karta lojalnościowa jest już skonfigurowana.",
@@ -25,8 +37,8 @@
       "wrong_account": "Ten token należy do innej karty lojalnościowej.",
       "cannot_connect": "Nie udało się połączyć z serwerami Biedronki.",
       "invalid_token": "Przechwycone logowanie zostało odrzucone. Spróbuj ponownie.",
-      "companion_requires_supervisor": "Biedronka wymaga Home Assistant OS albo Supervised z dodatkiem Browser Companion.",
-      "companion_not_running": "Uruchom dodatek Browser Companion, a potem dodaj tę integrację ponownie."
+      "companion_not_running": "Uruchom dodatek Browser Companion, a potem dodaj tę integrację ponownie.",
+      "reconfigure_successful": "Zalogowano ponownie. Integracja została przeładowana."
     },
     "progress": {
       "companion_wait": "Otwórz Browser Companion w nowym oknie:\n\n[{companion_url}]({companion_href})\n\nZaloguj się tam (captcha + SMS). Ten ekran zaktualizuje się po przechwyceniu przekierowania."
@@ -71,6 +83,21 @@
       },
       "shakeomat_last_offer": {
         "name": "Ostatnia oferta Shakeomatu"
+      },
+      "shakeomarka": {
+        "name": "Shakeomarka"
+      },
+      "shakeomarka_last_offer": {
+        "name": "Ostatnia oferta Shakeomarki"
+      },
+      "card_offers": {
+        "name": "Oferty z kartą"
+      },
+      "loyalty_actions": {
+        "name": "Akcje lojalnościowe"
+      },
+      "loyalty_balance": {
+        "name": "Saldo akcji lojalnościowej"
       }
     },
     "button": {
@@ -81,6 +108,58 @@
     "switch": {
       "auto_shakeomat": {
         "name": "Auto Shakeomat"
+      }
+    },
+    "event": {
+      "new_shakeomat_offer": {
+        "name": "Nowa oferta Shakeomatu",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "Nowa oferta"
+            }
+          }
+        }
+      },
+      "new_shakeomarka_offer": {
+        "name": "Nowa oferta Shakeomarki",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "Nowa oferta"
+            }
+          }
+        }
+      },
+      "new_card_offer": {
+        "name": "Nowa oferta z kartą",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "Nowa oferta"
+            }
+          }
+        }
+      },
+      "new_voucher_offer": {
+        "name": "Nowy voucher",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "Nowa oferta"
+            }
+          }
+        }
+      },
+      "new_loyalty_offer": {
+        "name": "Nowa akcja lojalnościowa",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "Nowa oferta"
+            }
+          }
+        }
       }
     }
   }

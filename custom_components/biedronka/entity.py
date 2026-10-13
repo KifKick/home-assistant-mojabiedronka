@@ -22,6 +22,13 @@ class BiedronkaEntity(CoordinatorEntity[BiedronkaCoordinator]):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._card)},
             manufacturer="Biedronka",
-            name="Moja Biedronka",
+            name=device_name(self._card),
             model="Karta lojalnościowa (nieoficjalne API)",
         )
+
+
+def device_name(card: str) -> str:
+    """'Moja Biedronka 5678' — the card suffix keeps several accounts apart."""
+    if card.isdigit() and len(card) >= 4:
+        return f"Moja Biedronka {card[-4:]}"
+    return "Moja Biedronka"

@@ -3,7 +3,18 @@
     "step": {
       "user": {
         "title": "Biedronka",
-        "description": "Sign in with the Browser Companion add-on (Chromium in the sidebar). Captcha and SMS stay in that browser."
+        "description": "Choose how to sign in. Browser Companion is recommended; the manual auth code is an optional alternative that works in any browser.",
+        "menu_options": {
+          "companion": "Browser Companion (recommended)",
+          "manual": "Manual auth code (optional): sign in in your browser and paste the redirect"
+        }
+      },
+      "manual": {
+        "title": "Sign in to Moja Biedronka",
+        "description": "1. On a computer, open this link: [konto.biedronka.pl]({auth_url})\n2. Enter your phone number and solve the captcha. **Before entering the SMS code**, press F12 and open the **Console** tab.\n3. Enter the SMS code. The page will not redirect anywhere — that is expected.\n4. Copy the console line `Failed to launch 'app://cma20.biedronka.pl?code=…'` (or just the `app://…` address) and paste it below. If the console is empty, use the **Network** tab: the last request has a `Location: app://…` header.\n\nThe code expires after about a minute, so paste it right away. If it is rejected, sign in again with the same link.",
+        "data": {
+          "redirect_url": "app:// address or code"
+        }
       },
       "companion": {
         "title": "Browser Companion",
@@ -17,7 +28,8 @@
     "error": {
       "cannot_connect": "Could not reach Biedronka servers.",
       "invalid_token": "Token was rejected. Sign in again.",
-      "companion_unavailable": "Browser Companion did not capture the login. Start the add-on and try again."
+      "companion_unavailable": "Browser Companion did not capture the login. Start the add-on and try again.",
+      "invalid_code": "The code is missing, expired or already used. Sign in again with the link and paste the new app:// address right away."
     },
     "abort": {
       "already_configured": "This loyalty card is already configured.",
@@ -25,8 +37,8 @@
       "wrong_account": "This token belongs to a different loyalty card.",
       "cannot_connect": "Could not reach Biedronka servers.",
       "invalid_token": "The captured login was rejected. Try again.",
-      "companion_requires_supervisor": "Biedronka needs Home Assistant OS or Supervised with the Browser Companion add-on.",
-      "companion_not_running": "Start the Browser Companion add-on, then add this integration again."
+      "companion_not_running": "Start the Browser Companion add-on, then add this integration again.",
+      "reconfigure_successful": "Signed in again. The integration has been reloaded."
     },
     "progress": {
       "companion_wait": "Open Browser Companion in a new window:\n\n[{companion_url}]({companion_href})\n\nSign in there (captcha + SMS). This screen updates when the redirect is captured."
@@ -71,6 +83,21 @@
       },
       "shakeomat_last_offer": {
         "name": "Last Shakeomat offer"
+      },
+      "shakeomarka": {
+        "name": "Shakeomarka"
+      },
+      "shakeomarka_last_offer": {
+        "name": "Last Shakeomarka offer"
+      },
+      "card_offers": {
+        "name": "Card offers"
+      },
+      "loyalty_actions": {
+        "name": "Loyalty actions"
+      },
+      "loyalty_balance": {
+        "name": "Loyalty balance"
       }
     },
     "button": {
@@ -81,6 +108,58 @@
     "switch": {
       "auto_shakeomat": {
         "name": "Auto Shakeomat"
+      }
+    },
+    "event": {
+      "new_shakeomat_offer": {
+        "name": "New Shakeomat offer",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "New offer"
+            }
+          }
+        }
+      },
+      "new_shakeomarka_offer": {
+        "name": "New Shakeomarka offer",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "New offer"
+            }
+          }
+        }
+      },
+      "new_card_offer": {
+        "name": "New card offer",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "New offer"
+            }
+          }
+        }
+      },
+      "new_voucher_offer": {
+        "name": "New voucher",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "New offer"
+            }
+          }
+        }
+      },
+      "new_loyalty_offer": {
+        "name": "New loyalty action",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "new_offer": "New offer"
+            }
+          }
+        }
       }
     }
   }

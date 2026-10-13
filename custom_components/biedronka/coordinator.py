@@ -28,18 +28,26 @@ from .const import (
 from .exceptions import BiedronkaAuthError, BiedronkaCannotConnect, BiedronkaError
 from .models import (
     EXPIRING_VOUCHER_STATUSES,
+    OFFER_KINDS,
     RECEIPT_SOURCE_DETAILS,
     RECEIPT_SOURCE_E_RECEIPT,
+    REWARD_DATA_FIELDS,
+    REWARD_SOURCE_APP,
+    REWARD_SOURCE_HA,
+    REWARD_SOURCE_PERSONAL,
     STATUS_AVAILABLE,
     STATUS_CLAIMED,
     STATUS_COOLDOWN,
     STATUS_EXPIRED,
     BiedronkaData,
+    LoyaltyAction,
     Receipt,
     ShakeomatOffer,
     ShakeomatReward,
     Voucher,
+    badge_labels,
     slim_receipt_lines,
+    wallet_balances,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,7 +69,7 @@ def _parse_dt(value: Any) -> datetime | None:
     return parsed
 
 
-def _as_sections(dashboard: Any) -> list[dict[str, Any]]:
+def as_sections(dashboard: Any) -> list[dict[str, Any]]:
     if isinstance(dashboard, list):
         return [item for item in dashboard if isinstance(item, dict)]
     if isinstance(dashboard, dict):
@@ -94,19 +102,52 @@ def _text(payload: dict[str, Any], *keys: str) -> str | None:
     return None
 
 
-def _reward_from_payload(offer_id: str, payload: dict[str, Any]) -> ShakeomatReward:
+PERSONAL_CAROUSEL_TYPES = frozenset({"j4u"})
+PROMOTION_ITEM_TYPES = frozenset({"SINGLE_PRODUCT_PROMOTION", "ACTION"})
+
+
+def _is_personal_offer(carousel: dict[str, Any], item: dict[str, Any]) -> bool:
+    """A "Tylko dla Ciebie" offer Biedronka assigned to this card (e.g. WELCOME)."""
+    return (
+        str(carousel.get("type") or "").lower() in PERSONAL_CAROUSEL_TYPES
+        and str(item.get("type") or "").upper() in PROMOTION_ITEM_TYPES
+    )
+
+
+def _reward_from_payload(
+    offer_id: str, payload: dict[str, Any], source: str = REWARD_SOURCE_HA
+) -> ShakeomatReward:
     """Map the revealed offer (ACTION or SINGLE_PRODUCT_PROMOTION) to a reward."""
     return ShakeomatReward(
         offer_id=offer_id,
+        promo_id=_text(payload, "id"),
+        source=source,
         claimed_at=datetime.now(WARSAW).isoformat(timespec="seconds"),
         name=_text(payload, "name", "title"),
         details=_text(payload, "details", "limit_message"),
         description=_text(payload, "description"),
-        price=_text(payload, "price", "price_tag_info"),
+        price=_text(payload, "price"),
         discount=_text(payload, "discount"),
         image_url=_text(payload, "image_url"),
         valid_from=_text(payload, "start", "start_date"),
         valid_to=_text(payload, "end", "end_date"),
+        regular_price=_text(payload, "regular_price"),
+        unit=_text(payload, "unit"),
+        unit_price=_text(payload, "unit_price"),
+        regular_unit_price=_text(payload, "regular_unit_price"),
+        omnibus_price=_text(payload, "omnibus_price"),
+        discount_to_omnibus_price=_text(payload, "discount_to_omnibus_price"),
+        price_tag_info=_text(payload, "price_tag_info"),
+        price_tag_note=_text(payload, "price_tag_note"),
+        limit_message_short=_text(payload, "limit_message_short"),
+        regular_price_line=_text(payload, "regular_price_line"),
+        omnibus_price_line=_text(payload, "omnibus_price_line"),
+        deposit=_text(payload, "deposit"),
+        origin_country=_text(payload, "origin_country"),
+        ean=_text(payload, "product_main_ean_code"),
+        offer_type=_text(payload, "offer_type", "type"),
+        promotion_type=_text(payload, "promotion_type"),
+        badges=badge_labels(payload.get("badges")),
     )
 
 
@@ -126,6 +167,11 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
         )
         self._rewards: dict[str, ShakeomatReward] = {}
         self._rewards_loaded = False
+        self._card_offers: list[ShakeomatReward] = []
+        # Offer key -> valid_to, for offers already announced as new.
+        self._notified: dict[str, str | None] = {}
+        # Categories already tracked; the first refresh of a new one is silent.
+        self._notified_kinds: set[str] = set()
         self._receipts: dict[str, Receipt] = {}
         self._assets: dict[str, str] = {}
         self._assets_fetched: datetime | None = None
@@ -174,7 +220,60 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
             vouchers=vouchers,
         )
         self._apply_shakeomats(data, shakeomats)
+        data.loyalty_actions = await self._load_loyalty_actions()
+        data.new_offers = await self._find_new_offers(
+            [
+                *self._rewards.values(),
+                *self._card_offers,
+                *(
+                    voucher
+                    for voucher in vouchers
+                    if voucher.number and voucher.status in EXPIRING_VOUCHER_STATUSES
+                ),
+                *data.active_loyalty_actions,
+            ]
+        )
         return data
+
+    async def _find_new_offers(self, offers: list[Any]) -> list[Any]:
+        """Offers, vouchers and actions not announced before.
+
+        The first refresh of every category only takes note of what is already
+        there, so installing (or upgrading) does not flood you with notifications.
+        """
+        now = datetime.now(WARSAW)
+        for key, valid_to in list(self._notified.items()):
+            end = _parse_dt(valid_to)
+            if end and end < now - timedelta(days=1):
+                del self._notified[key]
+        new = [offer for offer in offers if offer.key not in self._notified]
+        silent = set(OFFER_KINDS) - self._notified_kinds
+        if not new and not silent:
+            return []
+        for offer in new:
+            self._notified[offer.key] = offer.valid_to
+        self._notified_kinds.update(OFFER_KINDS)
+        await self._save_rewards()
+        return [offer for offer in new if offer.category not in silent]
+
+    async def _load_loyalty_actions(self) -> list[LoyaltyAction]:
+        """Sticker / points campaigns with their wallet balance. Failures are not fatal."""
+        try:
+            payload = await self.api.loyalty_actions()
+        except BiedronkaError as err:
+            _LOGGER.debug("Loyalty actions failed: %s", err)
+            return []
+        try:
+            balances = wallet_balances(await self.api.wallets())
+        except BiedronkaError as err:
+            _LOGGER.debug("Wallets failed: %s", err)
+            balances = {}
+        actions = (
+            LoyaltyAction.from_payload(item, balances)
+            for item in (payload if isinstance(payload, list) else [])
+            if isinstance(item, dict)
+        )
+        return [action for action in actions if action is not None]
 
     async def _today_total(
         self, first_page: list[dict[str, Any]], page_meta: dict[str, Any]
@@ -221,6 +320,7 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
         data.current_shakeomat = current
         data.reward_history = history
         data.last_reward = history[0] if history else None
+        data.card_offers = list(self._card_offers)
 
     async def _load_vouchers(self) -> list[Voucher]:
         """Coupons from the offers tab. A failure here leaves the rest of the refresh intact."""
@@ -248,7 +348,9 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
         assets = await self._load_assets()
         now = datetime.now(WARSAW)
         offers: dict[str, ShakeomatOffer] = {}
-        for section in _as_sections(dashboard):
+        revealed: list[dict[str, Any]] = []
+        personal: dict[str, ShakeomatReward] = {}
+        for section in as_sections(dashboard):
             if str(section.get("type") or "").upper() != "CAROUSELS":
                 continue
             param = section.get("param")
@@ -265,15 +367,68 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
             for item in items:
                 if not isinstance(item, dict):
                     continue
+                if item.get("from_shakeomat") is True:
+                    revealed.append(item)
+                    continue
+                if _is_personal_offer(carousel, item):
+                    offer = _reward_from_payload("", item, REWARD_SOURCE_PERSONAL)
+                    end = _parse_dt(offer.valid_to)
+                    if offer.promo_id and not (end and end <= now):
+                        offer.offer_id = f"personal_{offer.promo_id}"
+                        personal.setdefault(offer.promo_id, offer)
+                    continue
                 if str(item.get("type") or "").upper() not in SHAKEOMAT_TYPES:
                     continue
                 offer = self._classify(item, now, assets)
                 key = offer.offer_id or f"anonymous_{len(offers)}"
                 offers.setdefault(key, offer)
 
+        if self._remember_revealed(revealed, now):
+            self._prune_rewards()
+            await self._save_rewards()
+        self._card_offers = list(personal.values())
+
         return sorted(
             offers.values(), key=lambda offer: _parse_dt(offer.available_from) or EPOCH
         )
+
+    def _remember_revealed(self, items: list[dict[str, Any]], now: datetime) -> bool:
+        """Keep offers shaken in the phone app, and fill gaps in ones we revealed.
+
+        Once revealed, a Shakeomat card turns into a regular product offer with
+        `from_shakeomat: true`, so this is the only place they can be seen.
+        """
+        changed = False
+        for item in items:
+            found = _reward_from_payload("", item, REWARD_SOURCE_APP)
+            if not found.promo_id:
+                continue
+            end = _parse_dt(found.valid_to)
+            if end and end <= now:
+                continue
+            existing = next(
+                (
+                    reward
+                    for reward in self._rewards.values()
+                    if reward.promo_id == found.promo_id
+                    or (
+                        found.name is not None
+                        and reward.name == found.name
+                        and reward.valid_to == found.valid_to
+                    )
+                ),
+                None,
+            )
+            if existing is None:
+                found.offer_id = f"app_{found.promo_id}"
+                self._rewards[found.offer_id] = found
+                changed = True
+                continue
+            for name in REWARD_DATA_FIELDS:
+                if getattr(existing, name) in (None, []) and getattr(found, name):
+                    setattr(existing, name, getattr(found, name))
+                    changed = True
+        return changed
 
     def _classify(
         self, item: dict[str, Any], now: datetime, assets: dict[str, str]
@@ -329,6 +484,12 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
         self._rewards_loaded = True
         stored = await self._store.async_load()
         entries = stored.get("rewards") if isinstance(stored, dict) else None
+        notified = stored.get("notified") if isinstance(stored, dict) else None
+        if isinstance(notified, dict):
+            self._notified = {str(key): value for key, value in notified.items()}
+        kinds = stored.get("notified_kinds") if isinstance(stored, dict) else None
+        if isinstance(kinds, list):
+            self._notified_kinds = {str(kind) for kind in kinds}
         for entry in entries or []:
             if not isinstance(entry, dict):
                 continue
@@ -408,7 +569,11 @@ class BiedronkaCoordinator(DataUpdateCoordinator[BiedronkaData]):
 
     async def _save_rewards(self) -> None:
         await self._store.async_save(
-            {"rewards": [reward.as_dict() for reward in self._rewards.values()]}
+            {
+                "rewards": [reward.as_dict() for reward in self._rewards.values()],
+                "notified": self._notified,
+                "notified_kinds": sorted(self._notified_kinds),
+            }
         )
 
     async def async_activate_all(self, *, refresh: bool = True) -> list[dict[str, Any]]:

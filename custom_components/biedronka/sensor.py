@@ -1,4 +1,4 @@
-"""Sensors: card, last transaction, today spend, vouchers, Shakeomat status."""
+"""Sensors: card, transactions, vouchers, Shakeomat/Shakeomarka and card offers."""
 
 from __future__ import annotations
 
@@ -21,7 +21,14 @@ from .coordinator import (
     nearest_expiring_voucher,
 )
 from .entity import BiedronkaEntity
-from .models import STATUS_COOLDOWN, STATUS_NONE, VOUCHER_STATUS_READY
+from .models import (
+    KIND_SHAKEOMARKA,
+    KIND_SHAKEOMAT,
+    STATUS_AVAILABLE,
+    STATUS_COOLDOWN,
+    STATUS_NONE,
+    VOUCHER_STATUS_READY,
+)
 
 PARALLEL_UPDATES = 0
 
@@ -40,9 +47,14 @@ async def async_setup_entry(
             BiedronkaReceiptsSensor(coordinator),
             BiedronkaVouchersSensor(coordinator),
             BiedronkaVoucherExpirySensor(coordinator),
-            BiedronkaShakeomatSensor(coordinator),
+            BiedronkaShakeomatSensor(coordinator, KIND_SHAKEOMAT),
+            BiedronkaShakeomatSensor(coordinator, KIND_SHAKEOMARKA),
             BiedronkaShakeomatAvailableSensor(coordinator),
-            BiedronkaLastShakeomatSensor(coordinator),
+            BiedronkaLastShakeomatSensor(coordinator, KIND_SHAKEOMAT),
+            BiedronkaLastShakeomatSensor(coordinator, KIND_SHAKEOMARKA),
+            BiedronkaCardOffersSensor(coordinator),
+            BiedronkaLoyaltyActionsSensor(coordinator),
+            BiedronkaLoyaltyBalanceSensor(coordinator),
         ]
     )
 
@@ -218,18 +230,18 @@ class BiedronkaVoucherExpirySensor(BiedronkaEntity, SensorEntity):
 
 
 class BiedronkaShakeomatSensor(BiedronkaEntity, SensorEntity):
-    """Closest Shakeomat offer, with every pending one listed in the attributes."""
+    """Closest Shakeomat (or Shakeomarka) card, with every pending one listed."""
 
-    _attr_translation_key = "shakeomat"
-
-    def __init__(self, coordinator: BiedronkaCoordinator) -> None:
+    def __init__(self, coordinator: BiedronkaCoordinator, kind: str) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{self._card}_shakeomat"
+        self._kind = kind
+        self._attr_translation_key = kind
+        self._attr_unique_id = f"{self._card}_{kind}"
 
     @property
     def native_value(self) -> str:
         data = self.coordinator.data
-        current = data.current_shakeomat if data else None
+        current = data.current_of(self._kind) if data else None
         return current.status if current else STATUS_NONE
 
     @property
@@ -237,20 +249,21 @@ class BiedronkaShakeomatSensor(BiedronkaEntity, SensorEntity):
         data = self.coordinator.data
         if not data:
             return {}
-        offers = [offer.as_dict() for offer in data.shakeomats]
+        cards = data.shakeomats_of(self._kind)
         upcoming = [
-            offer.available_from
-            for offer in data.shakeomats
-            if offer.status == STATUS_COOLDOWN
+            offer.available_from for offer in cards if offer.status == STATUS_COOLDOWN
         ]
         attributes: dict[str, Any] = {
-            "pending_count": len(data.shakeomats),
-            "available_count": len(data.available_shakeomats),
+            "pending_count": len(cards),
+            "available_count": sum(
+                1 for offer in cards if offer.status == STATUS_AVAILABLE
+            ),
             "next_available_from": upcoming[0] if upcoming else None,
-            "offers": offers,
+            "offers": [offer.as_dict() for offer in cards],
         }
-        if data.current_shakeomat:
-            attributes.update(data.current_shakeomat.as_dict())
+        current = data.current_of(self._kind)
+        if current:
+            attributes.update(current.as_dict())
         return attributes
 
 
@@ -283,27 +296,117 @@ class BiedronkaShakeomatAvailableSensor(BiedronkaEntity, SensorEntity):
 class BiedronkaLastShakeomatSensor(BiedronkaEntity, SensorEntity):
     """Most recently revealed offer; earlier ones stay in the history attribute."""
 
-    _attr_translation_key = "shakeomat_last_offer"
-
-    def __init__(self, coordinator: BiedronkaCoordinator) -> None:
+    def __init__(self, coordinator: BiedronkaCoordinator, kind: str) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{self._card}_shakeomat_last_offer"
+        self._kind = kind
+        self._attr_translation_key = f"{kind}_last_offer"
+        self._attr_unique_id = f"{self._card}_{kind}_last_offer"
 
     @property
     def native_value(self) -> str | None:
-        reward = self.coordinator.data.last_reward if self.coordinator.data else None
-        if not reward:
+        data = self.coordinator.data
+        rewards = data.rewards_of(self._kind) if data else []
+        if not rewards:
             return None
-        return (reward.name or reward.offer_id)[:255]
+        return (rewards[0].name or rewards[0].offer_id)[:255]
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         data = self.coordinator.data
         if not data:
             return {}
+        rewards = data.rewards_of(self._kind)
         attributes: dict[str, Any] = {
-            "history": [reward.as_dict() for reward in data.reward_history]
+            "history": [reward.as_dict() for reward in rewards]
         }
-        if data.last_reward:
-            attributes.update(data.last_reward.as_dict())
+        if rewards:
+            attributes.update(rewards[0].as_dict())
         return attributes
+
+
+class BiedronkaCardOffersSensor(BiedronkaEntity, SensorEntity):
+    """Active "Tylko dla Ciebie" offers Biedronka assigned to this card."""
+
+    _attr_translation_key = "card_offers"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: BiedronkaCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{self._card}_card_offers"
+
+    @property
+    def native_value(self) -> int:
+        return len(self.coordinator.data.card_offers) if self.coordinator.data else 0
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data
+        if not data:
+            return {}
+        return {"offers": [offer.as_dict() for offer in data.card_offers]}
+
+
+class BiedronkaLoyaltyActionsSensor(BiedronkaEntity, SensorEntity):
+    """Active sticker / points campaigns ("Akcja"), all of them in `actions`."""
+
+    _attr_translation_key = "loyalty_actions"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: BiedronkaCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{self._card}_loyalty_actions"
+
+    @property
+    def native_value(self) -> int:
+        data = self.coordinator.data
+        return len(data.active_loyalty_actions) if data else 0
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data
+        if not data:
+            return {}
+        return {"actions": [action.as_dict() for action in data.loyalty_actions]}
+
+
+class BiedronkaLoyaltyBalanceSensor(BiedronkaEntity, SensorEntity):
+    """Stickers or points collected in the current campaign."""
+
+    _attr_translation_key = "loyalty_balance"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: BiedronkaCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{self._card}_loyalty_balance"
+
+    def _action(self):
+        data = self.coordinator.data
+        actions = data.active_loyalty_actions if data else []
+        return next((a for a in actions if a.balance is not None), None)
+
+    @property
+    def native_value(self) -> float | None:
+        action = self._action()
+        return action.balance if action else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        action = self._action()
+        if not action:
+            return {}
+        details = action.as_dict()
+        return {
+            "action": action.name,
+            **{
+                key: details[key]
+                for key in (
+                    "unit",
+                    "collect_until",
+                    "end_on",
+                    "available_rewards",
+                    "next_reward",
+                    "missing_to_next_reward",
+                    "rewards",
+                )
+            },
+        }

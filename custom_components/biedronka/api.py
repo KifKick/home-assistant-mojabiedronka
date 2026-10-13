@@ -176,5 +176,13 @@ class BiedronkaApi:
     async def coupons(self) -> dict[str, Any]:
         return await self.request("GET", "promos/coupons/")
 
+    async def loyalty_actions(self) -> Any:
+        """Sticker / points campaigns ("Akcja" on the app's home screen)."""
+        return await self.request("GET", "loyalty-actions/")
+
+    async def wallets(self) -> Any:
+        """Balances of the sticker / points wallets: perspectiv_id + balance."""
+        return await self.request("GET", "users/me/wallets/")
+
     async def reveal_and_activate(self, offer_id: str) -> Any:
         return await self.request("PATCH", f"offers/{offer_id}/reveal-and-activate/")

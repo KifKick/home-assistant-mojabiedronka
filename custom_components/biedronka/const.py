@@ -16,7 +16,7 @@ COMPANION_WAIT: Final = {
     "location_prefixes": [REDIRECT_URI],
 }
 
-API_USER_AGENT: Final = "Android/2.22.2"
+API_USER_AGENT: Final = "Android/2.24.0"
 KEYCLOAK_USER_AGENT: Final = (
     "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
@@ -29,11 +29,12 @@ CONF_PHONE: Final = "phone"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
 CONF_AUTO_SHAKEOMAT: Final = "auto_shakeomat"
 CONF_CARD_NUMBER: Final = "card_number"
+CONF_REDIRECT_URL: Final = "redirect_url"
 
 DEFAULT_SCAN_INTERVAL = timedelta(minutes=15)
 DEFAULT_AUTO_SHAKEOMAT: Final = False
 
-PLATFORMS: Final = ["sensor", "button", "switch"]
+PLATFORMS: Final = ["sensor", "button", "switch", "event"]
 
 SHAKEOMAT_TYPES: Final = ("SHAKEOMAT", "SHAKEOMAT_2", "SHAKEOMARKA")
 MAX_REWARD_HISTORY: Final = 20
