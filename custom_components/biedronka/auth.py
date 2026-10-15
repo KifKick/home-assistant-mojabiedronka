@@ -262,7 +262,10 @@ class KeycloakLogin:
             async with self._session.post(
                 TOKEN_URL,
                 data=data,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": KEYCLOAK_USER_AGENT,
+                },
             ) as resp:
                 payload = await resp.json(content_type=None)
                 if resp.status >= 400:

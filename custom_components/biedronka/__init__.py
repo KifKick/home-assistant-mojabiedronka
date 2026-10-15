@@ -6,12 +6,15 @@ from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .api import BiedronkaApi
 from .const import (
     CONF_ACCESS_TOKEN,
+    CONF_APP_VERSION,
     CONF_CARD_NUMBER,
     CONF_REFRESH_TOKEN,
     CONF_SCAN_INTERVAL,
@@ -20,8 +23,16 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import BiedronkaCoordinator
+from .services import async_setup_services
 
 type BiedronkaConfigEntry = ConfigEntry[BiedronkaCoordinator]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    async_setup_services(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: BiedronkaConfigEntry) -> bool:
@@ -38,11 +49,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: BiedronkaConfigEntry) ->
             },
         )
 
+    async def _save_app_version(version: str) -> None:
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_APP_VERSION: version}
+        )
+
     api = BiedronkaApi(
         session,
         entry.data[CONF_ACCESS_TOKEN],
         entry.data[CONF_REFRESH_TOKEN],
         save_tokens=_save_tokens,
+        app_version=entry.data.get(CONF_APP_VERSION),
+        save_app_version=_save_app_version,
     )
     coordinator = BiedronkaCoordinator(hass, entry, api)
     await coordinator.async_config_entry_first_refresh()

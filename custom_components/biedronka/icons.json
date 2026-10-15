@@ -1,21 +1,109 @@
 {
   "entity": {
     "sensor": {
-      "card": { "default": "mdi:credit-card-chip-outline" },
-      "last_transaction": { "default": "mdi:receipt-text-outline" },
-      "today_spend": { "default": "mdi:cash" },
-      "receipts": { "default": "mdi:receipt-text" },
-      "vouchers": { "default": "mdi:ticket-percent-outline" },
-      "voucher_expiry": { "default": "mdi:calendar-clock" },
-      "shakeomat": { "default": "mdi:gift-outline" },
-      "shakeomat_available": { "default": "mdi:gift-open-outline" },
-      "shakeomat_last_offer": { "default": "mdi:gift" }
+      "card": {
+        "default": "mdi:credit-card-chip-outline"
+      },
+      "last_transaction": {
+        "default": "mdi:receipt-text-outline"
+      },
+      "today_spend": {
+        "default": "mdi:cash"
+      },
+      "receipts": {
+        "default": "mdi:receipt-text"
+      },
+      "vouchers": {
+        "default": "mdi:ticket-percent-outline"
+      },
+      "voucher_expiry": {
+        "default": "mdi:calendar-clock"
+      },
+      "shakeomat": {
+        "default": "mdi:gift-outline"
+      },
+      "shakeomat_available": {
+        "default": "mdi:gift-open-outline"
+      },
+      "shakeomat_last_offer": {
+        "default": "mdi:gift"
+      },
+      "shakeomarka": {
+        "default": "mdi:star-four-points-outline"
+      },
+      "shakeomarka_last_offer": {
+        "default": "mdi:star-four-points"
+      },
+      "card_offers": {
+        "default": "mdi:tag-heart-outline"
+      },
+      "loyalty_actions": {
+        "default": "mdi:sticker-outline"
+      },
+      "loyalty_balance": {
+        "default": "mdi:sticker-check-outline"
+      },
+      "store_hours": {
+        "default": "mdi:store-clock-outline"
+      },
+      "messages": {
+        "default": "mdi:email-outline"
+      }
+    },
+    "event": {
+      "new_shakeomat_offer": {
+        "default": "mdi:gift"
+      },
+      "new_shakeomarka_offer": {
+        "default": "mdi:star-four-points"
+      },
+      "new_card_offer": {
+        "default": "mdi:tag-heart"
+      },
+      "new_voucher_offer": {
+        "default": "mdi:ticket-percent"
+      },
+      "new_loyalty_offer": {
+        "default": "mdi:sticker-plus-outline"
+      },
+      "new_message_offer": {
+        "default": "mdi:email-alert-outline"
+      },
+      "new_stickers_offer": {
+        "default": "mdi:sticker-plus"
+      },
+      "new_loyalty_reward_offer": {
+        "default": "mdi:gift-open-outline"
+      }
     },
     "button": {
-      "shakeomat_activate": { "default": "mdi:gesture-tap-button" }
+      "shakeomat_activate": {
+        "default": "mdi:gesture-tap-button"
+      }
     },
     "switch": {
-      "auto_shakeomat": { "default": "mdi:auto-fix" }
+      "auto_shakeomat": {
+        "default": "mdi:auto-fix"
+      }
+    },
+    "binary_sensor": {
+      "store_open": {
+        "default": "mdi:store-off-outline",
+        "state": {
+          "on": "mdi:store-check-outline"
+        }
+      }
+    }
+  },
+  "services": {
+    "product_info": {
+      "service": "mdi:barcode-scan"
+    },
+    "product_stock_nearby": {
+      "service": "mdi:store-search-outline"
+    },
+    "product_search": {
+      "service": "mdi:magnify"
     }
   }
 }
