@@ -16,7 +16,7 @@ COMPANION_WAIT: Final = {
     "location_prefixes": [REDIRECT_URI],
 }
 
-API_USER_AGENT: Final = "Android/2.22.2"
+API_USER_AGENT: Final = "Android/2.56.0"
 KEYCLOAK_USER_AGENT: Final = (
     "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
